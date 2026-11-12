@@ -1,0 +1,55 @@
+# Sends the queued ticket emails (Firestore notificationJobs, channel EMAIL) through Resend.
+# This replaces Cloud Functions for email while the Firebase project is on the free Spark plan.
+#
+# Repository secrets (Settings -> Secrets and variables -> Actions):
+#   FIREBASE_SERVICE_ACCOUNT  the whole service-account JSON of the Firebase project
+#   RESEND_API_KEY            the Resend API key
+# Repository variables:
+#   FIREBASE_PROJECT_ID       e.g. gdgcheckin-outdemo
+#   EMAIL_FROM                e.g. Scientific Club <tickets@your-domain.org>
+#
+# GitHub may start scheduled runs a few minutes late. The ticket is always shown on screen
+# right after registering; the email is the copy.
+name: Send ticket emails
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: send-emails
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - run: npm ci
+
+      - name: Send queued emails
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          GCLOUD_PROJECT: ${{ vars.FIREBASE_PROJECT_ID }}
+          EMAIL_FROM: ${{ vars.EMAIL_FROM }}
+        run: |
+          umask 077
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/service-account.json"
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/service-account.json" npm run send-emails
+          rm -f "$RUNNER_TEMP/service-account.json"

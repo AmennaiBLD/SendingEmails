@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_retry">Try again</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_close">Close</string>
+    <string name="common_save">Save</string>
+    <string name="common_back">Back</string>
+    <string name="common_confirm">Confirm</string>
+    <string name="common_load_failed">This could not be loaded.</string>
+    <string name="common_action_failed">That did not work. Check the connection and try again.</string>
+    <string name="common_saved">Saved.</string>
+    <string name="common_none">—</string>
+    <string name="common_unlimited">Unlimited</string>
+    <string name="common_yes">Yes</string>
+    <string name="common_no">No</string>
+    <string name="common_all">All</string>
+    <string name="common_select_event">Event</string>
+    <string name="common_select_event_placeholder">Choose an event</string>
+    <string name="common_no_events_title">No events yet</string>
+    <string name="common_file_saved">File saved.</string>
+    <string name="common_not_configured">The app is not connected to its backend yet.</string>
+    <string name="common_emulator_badge">Local emulator</string>
+
+    <string name="status_draft">Draft</string>
+    <string name="status_published">Published</string>
+    <string name="status_cancelled">Cancelled</string>
+    <string name="status_completed">Completed</string>
+    <string name="status_archived">Archived</string>
+
+    <string name="avail_open">Registration open</string>
+    <string name="avail_seats_left">%1$d seats left</string>
+    <string name="avail_not_yet_open">Opens soon</string>
+    <string name="avail_closed">Registration closed</string>
+    <string name="avail_full">Full</string>
+    <string name="avail_ended">Ended</string>
+    <string name="avail_not_published">Not available</string>
+
+    <string name="reg_status_registered">Registered</string>
+    <string name="reg_status_waitlisted">Waitlisted</string>
+    <string name="reg_status_cancelled">Cancelled</string>
+    <string name="att_none">Not arrived</string>
+    <string name="att_active">Checked in</string>
+    <string name="att_completed">Checked out</string>
+
+    <string name="session_active">Active</string>
+    <string name="session_completed">Completed</string>
+    <string name="session_corrected">Corrected</string>
+
+    <string name="outcome_absent">Absent</string>
+    <string name="outcome_missing_checkout">Missing check-out</string>
+    <string name="outcome_early">Left early</string>
+    <string name="outcome_partial">Partial</string>
+    <string name="outcome_full">Full attendance</string>
+
+    <string name="role_admin">Administrator</string>
+    <string name="role_organizer">Organizer</string>
+    <string name="role_participant">Participant</string>
+
+    <string name="delivery_email_only">Email only</string>
+    <string name="delivery_whatsapp_only">WhatsApp only</string>
+    <string name="delivery_both">Email and WhatsApp</string>
+</resources>

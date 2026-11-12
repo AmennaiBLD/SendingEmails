@@ -1,0 +1,18 @@
+{
+  "indexes": [
+    { "collectionGroup": "events", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "startAt", "order": "ASCENDING" } ] },
+    { "collectionGroup": "events", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "startAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "registrations", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "eventId", "order": "ASCENDING" }, { "fieldPath": "registeredAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "registrations", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "eventId", "order": "ASCENDING" }, { "fieldPath": "nameLower", "order": "ASCENDING" } ] },
+    { "collectionGroup": "registrations", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "normalizedEmail", "order": "ASCENDING" }, { "fieldPath": "registeredAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "attendanceSessions", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "eventId", "order": "ASCENDING" }, { "fieldPath": "checkInAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "eventOrganizers", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "organizerId", "order": "ASCENDING" }, { "fieldPath": "active", "order": "ASCENDING" }, { "fieldPath": "eventStartAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "notificationJobs", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "notificationJobs", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "nextAttemptAt", "order": "ASCENDING" } ] },
+    { "collectionGroup": "notificationJobs", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "leaseUntil", "order": "ASCENDING" } ] },
+    { "collectionGroup": "ticketAccessRequests", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "keyId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "auditLogs", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "actorId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "users", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "role", "order": "ASCENDING" }, { "fieldPath": "fullName", "order": "ASCENDING" } ] }
+  ],
+  "fieldOverrides": []
+}

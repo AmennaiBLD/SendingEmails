@@ -1,0 +1,15 @@
+{
+  "apiKey": "",
+  "authDomain": "",
+  "projectId": "",
+  "storageBucket": "",
+  "messagingSenderId": "",
+  "appId": "",
+  "androidAppId": "",
+  "iosAppId": "",
+  "emulatorHost": "",
+  "androidEmulatorHost": "",
+  "functionsRegion": "",
+  "emailDelivery": "false",
+  "whatsappDelivery": "false"
+}

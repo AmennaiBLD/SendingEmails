@@ -1,0 +1,15 @@
+{
+  "apiKey": "demo-api-key",
+  "authDomain": "demo-scientific-club.firebaseapp.com",
+  "projectId": "demo-scientific-club",
+  "storageBucket": "",
+  "messagingSenderId": "000000000000",
+  "appId": "1:000000000000:web:0000000000000000000000",
+  "androidAppId": "1:000000000000:android:0000000000000000000000",
+  "iosAppId": "1:000000000000:ios:0000000000000000000000",
+  "emulatorHost": "localhost",
+  "androidEmulatorHost": "10.0.2.2",
+  "functionsRegion": "europe-west1",
+  "emailDelivery": "false",
+  "whatsappDelivery": "false"
+}

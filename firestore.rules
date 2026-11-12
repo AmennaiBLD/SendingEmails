@@ -1,0 +1,361 @@
+rules_version = '2';
+
+// Scientific Club — Firestore security rules.
+//
+// The apps write to Firestore directly; these rules ARE the backend. Every write is checked
+// here: who may make it, which fields may change, and that it is consistent (registration
+// window, capacity, one registration per email, organizer assignment, server time).
+// Cloud Functions are only used to send email/WhatsApp and work with the Admin SDK.
+//
+// A role comes from `users/{uid}`, which only an active administrator may write.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Who is asking ─────────────────────────────────────────────────────────────────────
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function myPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function me() {
+      return get(myPath()).data;
+    }
+
+    function isStaff() {
+      return signedIn() && exists(myPath()) && me().isActive == true;
+    }
+
+    function isAdmin() {
+      return isStaff() && me().role == 'ADMIN';
+    }
+
+    function isOrganizer() {
+      return isStaff() && me().role == 'ORGANIZER';
+    }
+
+    function assignmentPath(eventId) {
+      return /databases/$(database)/documents/eventOrganizers/$(eventId + '_' + request.auth.uid);
+    }
+
+    // An organizer works on an event only while actively assigned to it.
+    function isAssignedTo(eventId) {
+      return isOrganizer() && exists(assignmentPath(eventId)) && get(assignmentPath(eventId)).data.active == true;
+    }
+
+    function canOperate(eventId) {
+      return isAdmin() || isAssignedTo(eventId);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────────────────
+
+    function text(value, min, max) {
+      return value is string && value.size() >= min && value.size() <= max;
+    }
+
+    // Instants come from the device; they must be within five minutes of the server's time.
+    function nearNow(value) {
+      return value is timestamp && math.abs(value.toMillis() - request.time.toMillis()) < 300000;
+    }
+
+    function onlyChanges(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
+    function eventPath(eventId) {
+      return /databases/$(database)/documents/events/$(eventId);
+    }
+
+    function registrationPath(registrationId) {
+      return /databases/$(database)/documents/registrations/$(registrationId);
+    }
+
+    function sessionPath(sessionId) {
+      return /databases/$(database)/documents/attendanceSessions/$(sessionId);
+    }
+
+    // ── Staff profiles ────────────────────────────────────────────────────────────────────
+
+    match /users/{userId} {
+      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if isAdmin() && validNewStaff(userId);
+      // Nobody changes their own role or switches themselves off.
+      allow update: if isAdmin() && userId != request.auth.uid
+        && onlyChanges(['role', 'isActive', 'updatedAt'])
+        && request.resource.data.role in ['ADMIN', 'ORGANIZER']
+        && request.resource.data.isActive is bool
+        && nearNow(request.resource.data.updatedAt);
+      allow delete: if false;
+    }
+
+    function validNewStaff(userId) {
+      let u = request.resource.data;
+      return u.keys().hasOnly(['id', 'fullName', 'email', 'phone', 'profilePhotoUrl', 'role', 'isActive', 'createdAt', 'updatedAt', 'createdBy'])
+        && u.id == userId
+        && text(u.fullName, 2, 120)
+        && text(u.email, 3, 254)
+        && u.phone is string
+        && u.role in ['ADMIN', 'ORGANIZER']
+        && u.isActive == true
+        && u.createdBy == request.auth.uid
+        && nearNow(u.createdAt);
+    }
+
+    // ── Events ────────────────────────────────────────────────────────────────────────────
+
+    // Published and completed events are the public website. Drafts, cancelled and archived
+    // events are visible to administrators, and to the organizers assigned to them.
+    match /events/{eventId} {
+      allow read: if resource.data.status in ['PUBLISHED', 'COMPLETED'] || isAdmin() || isAssignedTo(eventId);
+      allow create: if isAdmin() && validNewEvent(eventId);
+      allow update: if (isAdmin() && validEvent(request.resource.data) && allowedTransition(resource.data.status, request.resource.data.status))
+        || (canOperate(eventId) && attendanceCountersOnly())
+        || seatTakenByNewRegistration(eventId);
+      allow delete: if false;
+    }
+
+    function validEvent(e) {
+      return text(e.title, 3, 140)
+        && text(e.description, 1, 6000)
+        && text(e.category, 1, 60)
+        && text(e.location, 1, 200)
+        && text(e.organizerName, 0, 120)
+        && text(e.timezone, 1, 64)
+        && e.startAt is timestamp && e.endAt is timestamp && e.endAt > e.startAt
+        && e.registrationOpenAt is timestamp && e.registrationCloseAt is timestamp
+        && e.registrationCloseAt > e.registrationOpenAt && e.registrationCloseAt <= e.endAt
+        && e.capacity is int && e.capacity >= 0 && e.capacity <= 100000
+        && e.registrationCount is int && e.registrationCount >= 0
+        && (e.capacity == 0 || e.capacity >= e.registrationCount)
+        && e.allowReentry is bool && e.featured is bool
+        && e.status in ['DRAFT', 'PUBLISHED', 'CANCELLED', 'COMPLETED', 'ARCHIVED'];
+    }
+
+    function validNewEvent(eventId) {
+      let e = request.resource.data;
+      return validEvent(e)
+        && e.id == eventId
+        && e.status == 'DRAFT'
+        && e.registrationCount == 0 && e.attendeeCount == 0 && e.activeSessionCount == 0
+        && e.completedSessionCount == 0 && e.completedDurationSeconds == 0
+        && e.createdBy == request.auth.uid
+        && nearNow(e.createdAt);
+    }
+
+    // The status changes an administrator may make (EventStatus.nextStatuses in the app).
+    function allowedTransition(from, to) {
+      return from == to
+        || (from == 'DRAFT' && to in ['PUBLISHED', 'ARCHIVED'])
+        || (from == 'PUBLISHED' && to in ['DRAFT', 'CANCELLED', 'COMPLETED'])
+        || (from == 'CANCELLED' && to == 'ARCHIVED')
+        || (from == 'COMPLETED' && to in ['ARCHIVED', 'PUBLISHED']);
+    }
+
+    function attendanceCountersOnly() {
+      let e = request.resource.data;
+      return onlyChanges(['attendeeCount', 'activeSessionCount', 'completedSessionCount', 'completedDurationSeconds', 'updatedAt'])
+        && e.attendeeCount is int && e.attendeeCount >= 0
+        && e.activeSessionCount is int && e.activeSessionCount >= 0
+        && e.completedSessionCount is int && e.completedSessionCount >= 0
+        && e.completedDurationSeconds is int && e.completedDurationSeconds >= 0;
+    }
+
+    // A visitor's registration takes exactly one seat, and only together with that new registration.
+    function seatTakenByNewRegistration(eventId) {
+      let id = request.resource.data.lastRegistrationId;
+      return onlyChanges(['registrationCount', 'lastRegistrationId', 'updatedAt'])
+        && id is string
+        && request.resource.data.registrationCount == resource.data.get('registrationCount', 0) + 1
+        && !exists(registrationPath(id))
+        && getAfter(registrationPath(id)).data.eventId == eventId;
+    }
+
+    // ── Registrations (personal data: never public) ───────────────────────────────────────
+
+    match /registrations/{registrationId} {
+      allow read: if canOperate(resource.data.eventId);
+      // Anyone may register; validNewRegistration checks every field, the window and the capacity.
+      allow create: if validNewRegistration(registrationId);
+      allow update: if canOperate(resource.data.eventId)
+        && (attendanceUpdate(registrationId) || (isAdmin() && adminRegistrationUpdate()));
+      allow delete: if false;
+    }
+
+    function validNewRegistration(registrationId) {
+      let r = request.resource.data;
+      let before = get(eventPath(r.eventId)).data;
+      let after = getAfter(eventPath(r.eventId)).data;
+      let byAdmin = r.source == 'ADMIN';
+      let fields = ['id', 'eventId', 'participantId', 'participantName', 'nameLower', 'email', 'normalizedEmail', 'phone',
+        'university', 'faculty', 'department', 'studentId', 'status', 'ticketVersion', 'ticketSecret', 'registeredAt', 'updatedAt',
+        'deliveryPreference', 'whatsappConsent', 'source', 'registeredBy', 'attendanceStatus', 'activeSessionId', 'sessionCount',
+        'totalDurationSeconds', 'firstCheckInAt', 'lastCheckOutAt'];
+      return r.keys().hasOnly(fields) && r.keys().hasAll(fields)
+        && r.id == registrationId
+        && text(r.participantName, 2, 120) && text(r.nameLower, 2, 120)
+        && text(r.email, 3, 254)
+        && text(r.normalizedEmail, 3, 254) && r.normalizedEmail == r.normalizedEmail.lower()
+        && r.normalizedEmail.matches('^[^\\s@/]+@[^\\s@/]+[.][^\\s@/]{2,}$')
+        && r.phone is string && r.phone.matches('^[+][1-9][0-9]{7,14}$')
+        && text(r.university, 1, 120) && text(r.faculty, 1, 120) && text(r.department, 1, 120)
+        && (r.studentId == null || text(r.studentId, 1, 40))
+        && r.deliveryPreference in ['EMAIL_ONLY', 'WHATSAPP_ONLY', 'BOTH']
+        && r.whatsappConsent is bool && (r.deliveryPreference == 'EMAIL_ONLY' || r.whatsappConsent == true)
+        && r.status == 'REGISTERED' && r.ticketVersion == 1
+        && r.ticketSecret is string && r.ticketSecret.matches('^[a-f0-9]{64}$')
+        && nearNow(r.registeredAt) && r.updatedAt == r.registeredAt
+        && r.participantId == null && r.attendanceStatus == 'NONE' && r.activeSessionId == null
+        && r.sessionCount == 0 && r.totalDurationSeconds == 0 && r.firstCheckInAt == null && r.lastCheckOutAt == null
+        && (byAdmin ? (isAdmin() && r.registeredBy == request.auth.uid) : (r.source == 'PUBLIC' && r.registeredBy == null))
+        && before.status == 'PUBLISHED'
+        && request.time < before.endAt
+        && (byAdmin || (request.time >= before.registrationOpenAt && request.time <= before.registrationCloseAt))
+        && after.registrationCount == before.get('registrationCount', 0) + 1
+        && (before.capacity == 0 || after.registrationCount <= before.capacity)
+        && after.lastRegistrationId == registrationId
+        && getAfter(/databases/$(database)/documents/registrationKeys/$(r.eventId + '_' + r.normalizedEmail)).data.registrationId == registrationId;
+    }
+
+    // Check-in / check-out / correction: only the attendance fields, and a new open session must exist.
+    function attendanceUpdate(registrationId) {
+      let r = request.resource.data;
+      return onlyChanges(['attendanceStatus', 'activeSessionId', 'sessionCount', 'firstCheckInAt', 'totalDurationSeconds', 'lastCheckOutAt', 'updatedAt'])
+        && r.attendanceStatus in ['NONE', 'ACTIVE', 'COMPLETED']
+        && r.sessionCount is int && r.sessionCount >= resource.data.sessionCount
+        && r.totalDurationSeconds is int && r.totalDurationSeconds >= 0
+        && (r.activeSessionId == null || r.activeSessionId == resource.data.activeSessionId
+          || getAfter(sessionPath(r.activeSessionId)).data.registrationId == registrationId)
+        && nearNow(r.updatedAt);
+    }
+
+    // Cancellation and ticket replacement.
+    function adminRegistrationUpdate() {
+      let r = request.resource.data;
+      return onlyChanges(['status', 'cancelledAt', 'ticketVersion', 'ticketSecret', 'updatedAt'])
+        && r.status in ['REGISTERED', 'CANCELLED']
+        && r.ticketVersion is int && r.ticketVersion >= resource.data.ticketVersion
+        && r.ticketSecret is string && r.ticketSecret.matches('^[a-f0-9]{64}$')
+        && nearNow(r.updatedAt);
+    }
+
+    // One key per (event, email): it makes a second registration with the same email impossible.
+    // Readable one by one (the registration form checks it), never listable.
+    match /registrationKeys/{keyId} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if validNewKey(keyId);
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    function validNewKey(keyId) {
+      let k = request.resource.data;
+      let registration = getAfter(registrationPath(k.registrationId)).data;
+      return k.keys().hasOnly(['registrationId', 'eventId', 'createdAt'])
+        && k.registrationId is string
+        && !exists(registrationPath(k.registrationId))
+        && registration.eventId == k.eventId
+        && keyId == k.eventId + '_' + registration.normalizedEmail
+        && nearNow(k.createdAt);
+    }
+
+    // ── Attendance ────────────────────────────────────────────────────────────────────────
+
+    match /attendanceSessions/{sessionId} {
+      allow read: if canOperate(resource.data.eventId);
+      allow create: if canOperate(request.resource.data.eventId) && validNewSession(sessionId);
+      allow update: if canOperate(resource.data.eventId) && validSessionUpdate();
+      allow delete: if false;
+    }
+
+    function validNewSession(sessionId) {
+      let s = request.resource.data;
+      let registration = getAfter(registrationPath(s.registrationId)).data;
+      let event = get(eventPath(s.eventId)).data;
+      return s.id == sessionId
+        && s.status == 'ACTIVE' && s.checkOutAt == null && s.durationSeconds == null && s.corrected == false
+        && s.checkedInBy == request.auth.uid
+        && nearNow(s.checkInAt)
+        && registration.eventId == s.eventId
+        && registration.status == 'REGISTERED'
+        && registration.activeSessionId == sessionId
+        && event.status == 'PUBLISHED'
+        && request.time > event.startAt - duration.value(3, 'h')
+        && request.time < event.endAt + duration.value(6, 'h');
+    }
+
+    function validSessionUpdate() {
+      let s = request.resource.data;
+      return onlyChanges(['checkInAt', 'checkOutAt', 'checkedOutBy', 'checkedOutByName', 'durationSeconds', 'status', 'corrected', 'updatedAt'])
+        && s.status in ['ACTIVE', 'COMPLETED', 'CORRECTED']
+        && s.checkInAt is timestamp && s.checkInAt < request.time + duration.value(5, 'm')
+        && (s.checkOutAt == null || (s.checkOutAt is timestamp && s.checkOutAt > s.checkInAt && s.checkOutAt < request.time + duration.value(5, 'm')))
+        && (s.durationSeconds == null || (s.durationSeconds is int && s.durationSeconds >= 0))
+        && nearNow(s.updatedAt);
+    }
+
+    match /eventOrganizers/{assignmentId} {
+      allow read: if isAdmin() || (isOrganizer() && resource.data.organizerId == request.auth.uid);
+      allow create, update: if isAdmin()
+        && assignmentId == request.resource.data.eventId + '_' + request.resource.data.organizerId
+        && request.resource.data.active is bool;
+      allow delete: if false;
+    }
+
+    // ── Outbox and audit trail ────────────────────────────────────────────────────────────
+
+    // Messages for the email/WhatsApp sender (Cloud Functions). Created with the registration or
+    // by an administrator; only the sender (Admin SDK) updates them.
+    match /notificationJobs/{jobId} {
+      allow read: if isAdmin();
+      allow create: if validNewJob(jobId);
+      allow update, delete: if false;
+    }
+
+    function validNewJob(jobId) {
+      let j = request.resource.data;
+      let registration = getAfter(registrationPath(j.registrationId)).data;
+      return j.keys().hasOnly(['id', 'registrationId', 'eventId', 'eventTitle', 'participantName', 'channel', 'kind', 'recipient',
+          'ticketVersion', 'status', 'provider', 'providerMessageId', 'attemptCount', 'lastError', 'nextAttemptAt', 'leaseUntil',
+          'createdAt', 'updatedAt', 'sentAt', 'deliveredAt'])
+        && j.id == jobId
+        && j.registrationId is string && j.registrationId.matches('^[A-Za-z0-9]{10,40}$')
+        && jobId.matches('^' + j.registrationId + '_v[0-9]+_(EMAIL|WHATSAPP)_(REGISTRATION_CONFIRMATION|TICKET_REPLACEMENT)(_r[0-9]+)?$')
+        && j.status == 'PENDING' && j.attemptCount == 0
+        && j.provider == null && j.providerMessageId == null && j.lastError == null && j.leaseUntil == null
+        && j.sentAt == null && j.deliveredAt == null
+        && nearNow(j.createdAt)
+        && j.eventId == registration.eventId
+        && j.ticketVersion == registration.ticketVersion
+        && ((j.channel == 'EMAIL' && j.recipient == registration.email)
+          || (j.channel == 'WHATSAPP' && j.recipient == registration.phone && registration.whatsappConsent == true))
+        && (isAdmin() || (j.kind == 'REGISTRATION_CONFIRMATION' && !exists(registrationPath(j.registrationId))));
+    }
+
+    // Append-only: staff write their own entries, administrators read them, nobody edits them.
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isStaff()
+        && request.resource.data.keys().hasOnly(['actorId', 'actorName', 'action', 'entityType', 'entityId', 'eventId', 'reason',
+          'previousValue', 'newValue', 'details', 'createdAt'])
+        && request.resource.data.actorId == request.auth.uid
+        && text(request.resource.data.action, 1, 60)
+        && nearNow(request.resource.data.createdAt);
+      allow update, delete: if false;
+    }
+
+    // Club name, contact details, social links: public.
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin() && docId == 'club';
+    }
+
+    // ticketAccessRequests (email codes) and anything else: Cloud Functions only.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
