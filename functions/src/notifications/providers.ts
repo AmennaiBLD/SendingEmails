@@ -1,3 +1,4 @@
+import { createTransport, Transporter } from "nodemailer";
 import { logger } from "firebase-functions";
 import { EmailContent, EventFacts } from "./templates";
 
@@ -115,6 +116,58 @@ export class ResendEmailProvider implements EmailProvider {
     const id = (JSON.parse(text) as { id?: string }).id;
     if (!id) throw new ProviderError("Resend returned no message id.", true);
     return { providerMessageId: id };
+  }
+}
+
+// ── Gmail (free, no domain needed) ────────────────────────────────────────────────────────
+
+/** Sorts a Gmail SMTP failure: our setup, a retry later, or this recipient for good. */
+export function gmailFailure(error: unknown): ProviderError {
+  const e = error as { code?: string; responseCode?: number; message?: string };
+  const message = `Gmail: ${(e.message ?? "unknown error").slice(0, 300)}`;
+  // Wrong address or App Password, 2-step verification off: fix the secrets, the emails wait.
+  if (e.code === "EAUTH" || e.responseCode === 534 || e.responseCode === 535) return new ProviderError(message, false, true);
+  // 4xx answers (including the daily sending limit, 550 5.4.5) and network problems: try again later.
+  if (/5\.4\.5|daily user sending limit/i.test(message)) return new ProviderError(message, true);
+  if (e.responseCode !== undefined && e.responseCode >= 400 && e.responseCode < 500) return new ProviderError(message, true);
+  if (e.responseCode === undefined) return new ProviderError(message, true);
+  // Other 5xx: this recipient cannot receive the message.
+  return new ProviderError(message, false);
+}
+
+/**
+ * Sends through a Gmail account with an App Password (Google account -> Security -> 2-Step
+ * Verification -> App passwords). The message is sent as that Gmail address: about 500 emails a
+ * day on a personal account. The QR travels as an inline attachment (cid:ticket-qr).
+ */
+export class GmailEmailProvider implements EmailProvider {
+  readonly name = "gmail";
+  private readonly transport: Transporter;
+
+  constructor(private readonly user: string, appPassword: string, private readonly fromName: string) {
+    this.transport = createTransport({ service: "gmail", auth: { user, pass: appPassword.replace(/\s+/g, "") } });
+  }
+
+  async send(input: { to: string; content: EmailContent; attachments: EmailAttachment[]; idempotencyKey: string }): Promise<SendResult> {
+    try {
+      const info = await this.transport.sendMail({
+        from: { name: this.fromName, address: this.user },
+        to: input.to,
+        subject: input.content.subject,
+        html: input.content.html,
+        text: input.content.text,
+        attachments: input.attachments.map((a) => ({
+          filename: a.filename,
+          content: a.content,
+          contentType: a.contentType,
+          ...(a.contentId ? { cid: a.contentId } : {}),
+        })),
+        headers: { "X-Entity-Ref-ID": input.idempotencyKey },
+      });
+      return { providerMessageId: info.messageId };
+    } catch (error) {
+      throw gmailFailure(error);
+    }
   }
 }
 

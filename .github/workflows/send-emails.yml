@@ -1,12 +1,15 @@
-# Sends the queued ticket emails (Firestore notificationJobs, channel EMAIL) through Resend.
+# Sends the queued ticket emails (Firestore notificationJobs, channel EMAIL).
 # This replaces Cloud Functions for email while the Firebase project is on the free Spark plan.
 #
 # Repository secrets (Settings -> Secrets and variables -> Actions):
 #   FIREBASE_SERVICE_ACCOUNT  the whole service-account JSON of the Firebase project
-#   RESEND_API_KEY            the Resend API key
-# Repository variables:
+#   Gmail, free and no domain needed (used when both are set):
+#     GMAIL_USER              the Gmail address that sends the tickets
+#     GMAIL_APP_PASSWORD      its App Password (Google account -> Security -> App passwords)
+#     EMAIL_FROM_NAME         optional sender name, default "Scientific Club"
+#   or Resend (needs a verified domain):
+#     RESEND_API_KEY, EMAIL_FROM (e.g. Scientific Club <tickets@your-domain.org>)
 #   FIREBASE_PROJECT_ID       optional: read from the service-account file when not set
-#   EMAIL_FROM                e.g. Scientific Club <tickets@your-domain.org>
 #
 # GitHub may start scheduled runs a few minutes late. The ticket is always shown on screen
 # right after registering; the email is the copy.
@@ -46,14 +49,22 @@ jobs:
       - name: Check the settings
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          EMAIL_FROM_NAME: ${{ vars.EMAIL_FROM_NAME || secrets.EMAIL_FROM_NAME }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           GCLOUD_PROJECT: ${{ vars.FIREBASE_PROJECT_ID || secrets.FIREBASE_PROJECT_ID }}
           EMAIL_FROM: ${{ vars.EMAIL_FROM || secrets.EMAIL_FROM }}
         run: |
           missing=0
           [ -n "$FIREBASE_SERVICE_ACCOUNT" ] || { echo "::error::Secret FIREBASE_SERVICE_ACCOUNT is missing"; missing=1; }
-          [ -n "$RESEND_API_KEY" ] || { echo "::error::Secret RESEND_API_KEY is missing"; missing=1; }
-          [ -n "$EMAIL_FROM" ] || { echo "::error::Variable EMAIL_FROM is missing"; missing=1; }
+          if [ -n "$GMAIL_USER" ] || [ -n "$GMAIL_APP_PASSWORD" ]; then
+            [ -n "$GMAIL_USER" ] || { echo "::error::Secret GMAIL_USER is missing"; missing=1; }
+            [ -n "$GMAIL_APP_PASSWORD" ] || { echo "::error::Secret GMAIL_APP_PASSWORD is missing"; missing=1; }
+          else
+            [ -n "$RESEND_API_KEY" ] || { echo "::error::Add GMAIL_USER + GMAIL_APP_PASSWORD (free), or RESEND_API_KEY"; missing=1; }
+            [ -n "$EMAIL_FROM" ] || { echo "::error::EMAIL_FROM is missing (needed with Resend)"; missing=1; }
+          fi
           if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
             printf '%s' "$FIREBASE_SERVICE_ACCOUNT" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);if(j.type!=="service_account"||!j.private_key)throw 0}catch{console.log("::error::FIREBASE_SERVICE_ACCOUNT is not the service-account JSON file (paste the whole file)");process.exit(1)}})' || missing=1
           fi
@@ -62,6 +73,9 @@ jobs:
       - name: Send queued emails
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          EMAIL_FROM_NAME: ${{ vars.EMAIL_FROM_NAME || secrets.EMAIL_FROM_NAME }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           GCLOUD_PROJECT: ${{ vars.FIREBASE_PROJECT_ID || secrets.FIREBASE_PROJECT_ID }}
           EMAIL_FROM: ${{ vars.EMAIL_FROM || secrets.EMAIL_FROM }}

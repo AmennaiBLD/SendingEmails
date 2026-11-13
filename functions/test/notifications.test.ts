@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { NOTIFICATION_MAX_ATTEMPTS } from "../src/shared/config";
 import { C, db } from "../src/shared/firebase";
 import { processDueJobs, processNotificationJob, recordDeliveryStatus } from "../src/notifications/outbox";
-import { ProviderError } from "../src/notifications/providers";
+import { gmailFailure, ProviderError } from "../src/notifications/providers";
 import { parseMetaStatuses, verifyMetaSignature, verifySvixSignature } from "../src/notifications/webhooks";
 import { newTicketSecret, ticketCode } from "../src/shared/ticketCode";
 import { createHmac } from "node:crypto";
@@ -116,4 +116,15 @@ test("the email QR is built from the secret stored on the registration", async (
   assert.match(reg.ticketSecret, /^[a-f0-9]{64}$/);
   assert.equal(ticketCode(ticket.registrationId, 1, reg.ticketSecret), `SC2.${ticket.registrationId}.1.${reg.ticketSecret}`);
   assert.notEqual(newTicketSecret(), newTicketSecret());
+});
+
+test("Gmail failures are sorted: setup problem, try later, or a bad recipient", () => {
+  const auth = gmailFailure({ code: "EAUTH", responseCode: 535, message: "Username and Password not accepted" });
+  assert.equal(auth.configuration, true, "a wrong App Password keeps the emails queued");
+  assert.equal(gmailFailure({ responseCode: 550, message: "550-5.4.5 Daily user sending limit exceeded" }).retryable, true);
+  assert.equal(gmailFailure({ responseCode: 421, message: "Try again later" }).retryable, true);
+  assert.equal(gmailFailure({ code: "ETIMEDOUT", message: "Connection timeout" }).retryable, true);
+  const bad = gmailFailure({ responseCode: 553, message: "Invalid recipient" });
+  assert.equal(bad.retryable, false);
+  assert.equal(bad.configuration, false);
 });
