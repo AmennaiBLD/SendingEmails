@@ -6,10 +6,10 @@ import { formatEventDate, formatEventTime } from "../shared/time";
 import { ticketCode } from "../shared/ticketCode";
 import { renderTicketAssets } from "../ticket/ticketAssets";
 import { EmailProvider, ProviderError, WhatsAppProvider } from "./providers";
-import { EventFacts, registrationConfirmationEmail, ticketReplacementEmail } from "./templates";
+import { EventFacts, registrationApprovedEmail, registrationConfirmationEmail, registrationReceivedEmail, ticketReplacementEmail } from "./templates";
 
 export type Channel = "EMAIL" | "WHATSAPP";
-export type JobKind = "REGISTRATION_CONFIRMATION" | "TICKET_REPLACEMENT";
+export type JobKind = "REGISTRATION_CONFIRMATION" | "REGISTRATION_APPROVED" | "TICKET_REPLACEMENT";
 export type JobStatus = "PENDING" | "PROCESSING" | "SENT" | "DELIVERED" | "FAILED" | "RETRYING";
 
 export interface OutboxDeps {
@@ -83,7 +83,11 @@ export async function processNotificationJob(db: Firestore, jobId: string, deps:
     let providerMessageId: string;
     if (job.channel === "EMAIL") {
       providerName = deps.email.name;
-      const content = job.kind === "TICKET_REPLACEMENT" ? ticketReplacementEmail(facts) : registrationConfirmationEmail(facts);
+      // The registration email says "pending approval" while it is; approval sends its own email.
+      const content = job.kind === "TICKET_REPLACEMENT" ? ticketReplacementEmail(facts)
+        : job.kind === "REGISTRATION_APPROVED" ? registrationApprovedEmail(facts)
+        : reg.status === "PENDING" ? registrationReceivedEmail(facts)
+        : registrationConfirmationEmail(facts);
       ({ providerMessageId } = await deps.email.send({
         to: job.recipient, content, idempotencyKey: jobId,
         attachments: [
