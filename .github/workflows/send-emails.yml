@@ -42,12 +42,30 @@ jobs:
 
       - run: npm ci
 
+      # Names only, never values. FIREBASE_PROJECT_ID and EMAIL_FROM may be variables or secrets.
+      - name: Check the settings
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          GCLOUD_PROJECT: ${{ vars.FIREBASE_PROJECT_ID || secrets.FIREBASE_PROJECT_ID }}
+          EMAIL_FROM: ${{ vars.EMAIL_FROM || secrets.EMAIL_FROM }}
+        run: |
+          missing=0
+          [ -n "$FIREBASE_SERVICE_ACCOUNT" ] || { echo "::error::Secret FIREBASE_SERVICE_ACCOUNT is missing"; missing=1; }
+          [ -n "$RESEND_API_KEY" ] || { echo "::error::Secret RESEND_API_KEY is missing"; missing=1; }
+          [ -n "$GCLOUD_PROJECT" ] || { echo "::error::Variable FIREBASE_PROJECT_ID is missing"; missing=1; }
+          [ -n "$EMAIL_FROM" ] || { echo "::error::Variable EMAIL_FROM is missing"; missing=1; }
+          if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            printf '%s' "$FIREBASE_SERVICE_ACCOUNT" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);if(j.type!=="service_account"||!j.private_key)throw 0}catch{console.log("::error::FIREBASE_SERVICE_ACCOUNT is not the service-account JSON file (paste the whole file)");process.exit(1)}})' || missing=1
+          fi
+          exit $missing
+
       - name: Send queued emails
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          GCLOUD_PROJECT: ${{ vars.FIREBASE_PROJECT_ID }}
-          EMAIL_FROM: ${{ vars.EMAIL_FROM }}
+          GCLOUD_PROJECT: ${{ vars.FIREBASE_PROJECT_ID || secrets.FIREBASE_PROJECT_ID }}
+          EMAIL_FROM: ${{ vars.EMAIL_FROM || secrets.EMAIL_FROM }}
         run: |
           umask 077
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/service-account.json"
