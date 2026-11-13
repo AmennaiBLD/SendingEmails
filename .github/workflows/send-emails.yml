@@ -5,7 +5,7 @@
 #   FIREBASE_SERVICE_ACCOUNT  the whole service-account JSON of the Firebase project
 #   RESEND_API_KEY            the Resend API key
 # Repository variables:
-#   FIREBASE_PROJECT_ID       e.g. gdgcheckin-outdemo
+#   FIREBASE_PROJECT_ID       optional: read from the service-account file when not set
 #   EMAIL_FROM                e.g. Scientific Club <tickets@your-domain.org>
 #
 # GitHub may start scheduled runs a few minutes late. The ticket is always shown on screen
@@ -53,7 +53,6 @@ jobs:
           missing=0
           [ -n "$FIREBASE_SERVICE_ACCOUNT" ] || { echo "::error::Secret FIREBASE_SERVICE_ACCOUNT is missing"; missing=1; }
           [ -n "$RESEND_API_KEY" ] || { echo "::error::Secret RESEND_API_KEY is missing"; missing=1; }
-          [ -n "$GCLOUD_PROJECT" ] || { echo "::error::Variable FIREBASE_PROJECT_ID is missing"; missing=1; }
           [ -n "$EMAIL_FROM" ] || { echo "::error::Variable EMAIL_FROM is missing"; missing=1; }
           if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
             printf '%s' "$FIREBASE_SERVICE_ACCOUNT" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);if(j.type!=="service_account"||!j.private_key)throw 0}catch{console.log("::error::FIREBASE_SERVICE_ACCOUNT is not the service-account JSON file (paste the whole file)");process.exit(1)}})' || missing=1
@@ -69,5 +68,11 @@ jobs:
         run: |
           umask 077
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/service-account.json"
+          # The project id is in the service-account file; FIREBASE_PROJECT_ID only overrides it.
+          if [ -z "$GCLOUD_PROJECT" ]; then
+            GCLOUD_PROJECT=$(node -e 'console.log(require(process.argv[1]).project_id)' "$RUNNER_TEMP/service-account.json")
+            export GCLOUD_PROJECT
+          fi
+          echo "Firebase project: $GCLOUD_PROJECT"
           GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/service-account.json" npm run send-emails
           rm -f "$RUNNER_TEMP/service-account.json"
