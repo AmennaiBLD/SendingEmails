@@ -102,6 +102,11 @@ export async function processNotificationJob(db: Firestore, jobId: string, deps:
     const message = ((error as Error).message || "Unknown error").slice(0, 500);
     logger.warn("Notification attempt failed", { jobId, channel: job.channel, attempt: job.attemptCount, retryable, message });
     const provider = job.channel === "EMAIL" ? deps.email.name : deps.whatsapp.name;
+    if (error instanceof ProviderError && error.configuration) {
+      // Our setup is wrong, not this message: back to the queue without using up an attempt,
+      // tried again on the next scheduled run.
+      return finish({ status: "PENDING", provider, lastError: message, attemptCount: job.attemptCount - 1, nextAttemptAt: Timestamp.fromMillis(now() + 10 * 60 * 1000) });
+    }
     if (retryable && job.attemptCount < NOTIFICATION_MAX_ATTEMPTS) {
       return finish({ status: "RETRYING", provider, lastError: message, nextAttemptAt: Timestamp.fromMillis(now() + retryDelayMs(job.attemptCount)) });
     }

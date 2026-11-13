@@ -3,7 +3,11 @@ import { EmailContent, EventFacts } from "./templates";
 
 /** A provider failure. `retryable` separates "try again later" from "this will never work". */
 export class ProviderError extends Error {
-  constructor(message: string, readonly retryable: boolean) {
+  /**
+   * `configuration`: the message is fine but our sender setup is wrong (e.g. an unverified sender
+   * domain). The job goes back to the queue unchanged, to be sent once the setup is fixed.
+   */
+  constructor(message: string, readonly retryable: boolean, readonly configuration = false) {
     super(message);
   }
 }
@@ -32,7 +36,10 @@ export interface WhatsAppProvider {
 }
 
 function failFor(status: number, detail: string): ProviderError {
-  return new ProviderError(`HTTP ${status}: ${detail.slice(0, 300)}`, status === 429 || status >= 500);
+  const message = `HTTP ${status}: ${detail.slice(0, 300)}`;
+  // Resend answers 403 when the sender domain is not verified or the key may not send: a setup problem.
+  if (status === 401 || status === 403) return new ProviderError(message, false, true);
+  return new ProviderError(message, status === 429 || status >= 500);
 }
 
 async function post(url: string, init: RequestInit): Promise<Response> {

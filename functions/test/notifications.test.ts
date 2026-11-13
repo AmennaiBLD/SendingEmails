@@ -70,6 +70,17 @@ test("a permanent failure is not retried; repeated temporary failures stop at th
   assert.equal((await flaky.job("EMAIL")).attemptCount, NOTIFICATION_MAX_ATTEMPTS);
 });
 
+test("a sender setup error keeps the email queued without using up an attempt", async () => {
+  const { id, job } = await registered({ deliveryPreference: "EMAIL_ONLY" });
+  const email = new FakeEmail();
+  email.failures.push(new ProviderError("HTTP 403: The gmail.com domain is not verified", false, true));
+  assert.equal(await processNotificationJob(db, id("EMAIL"), { email, whatsapp: new FakeWhatsApp() }), "PENDING");
+  const queued = await job("EMAIL");
+  assert.equal(queued.attemptCount, 0);
+  assert.ok(queued.nextAttemptAt.toMillis() > Date.now() + 5 * 60 * 1000, "not retried in the same run");
+  assert.match(queued.lastError, /not verified/);
+});
+
 test("concurrent workers send one message for one job", async () => {
   const { id } = await registered({ deliveryPreference: "EMAIL_ONLY" });
   const email = new FakeEmail();
