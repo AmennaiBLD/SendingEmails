@@ -1,7 +1,11 @@
 package com.example.checkinoutapp.feature.registration
 
+import com.example.checkinoutapp.firebase.FirebaseAppConfig
+import com.example.checkinoutapp.navigation.ticketRetrievalVisible
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import com.example.checkinoutapp.domain.repository.RegistrationOutcome
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -73,7 +77,11 @@ fun RegistrationScreen(
             Spacer(Modifier.height(Spacing.xxl))
             val issued = ticket
             if (issued != null) {
-                TicketConfirmation(issued, settings.clubName, stringResource(Res.string.tk_confirmed_title), navigateToEvents)
+                TicketConfirmation(
+                    issued, settings.clubName,
+                    stringResource(if (issued.approved) Res.string.tk_confirmed_title else Res.string.rg_submitted_title),
+                    navigateToEvents,
+                )
                 return@ContentColumn
             }
             when (val loaded = details) {
@@ -85,7 +93,7 @@ fun RegistrationScreen(
                         EmptyState(
                             Icons.Outlined.EventBusy, stringResource(Res.string.rg_unavailable_title),
                             body = content?.let { it.availability.label(it.event) } ?: stringResource(Res.string.details_not_found_body),
-                        ) { ClubButton(stringResource(Res.string.details_find_ticket), { navigateToFindTicket(id) }, kind = ButtonKind.Secondary) }
+                        ) { if (ticketRetrievalVisible) ClubButton(stringResource(Res.string.details_find_ticket), { navigateToFindTicket(id) }, kind = ButtonKind.Secondary) }
                     } else {
                         RegistrationFormContent(content.event, state, viewModel, navigateToFindTicket = { navigateToFindTicket(id) })
                     }
@@ -133,7 +141,13 @@ private fun RegistrationFormContent(event: ClubEvent, state: RegistrationFormSta
     ClubCard(Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
             Text(stringResource(Res.string.rg_delivery_title), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-            SegmentedControl(DeliveryPreference.entries, form.deliveryPreference, label = { it.label() }, onSelect = viewModel::setDelivery)
+            // WhatsApp is offered only once its sender is set up (whatsappDelivery in firebase/app-config.json):
+            // otherwise a "WhatsApp only" participant would receive nothing.
+            if (FirebaseAppConfig.WHATSAPP_DELIVERY == "true") {
+                SegmentedControl(DeliveryPreference.entries, form.deliveryPreference, label = { it.label() }, onSelect = viewModel::setDelivery)
+            } else {
+                Text(stringResource(Res.string.rg_delivery_email_only), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             if (form.deliveryPreference.usesWhatsApp) {
                 CheckRow(form.whatsappConsent, viewModel::setWhatsAppConsent, stringResource(Res.string.rg_whatsapp_consent), error = RegistrationField.WHATSAPP_CONSENT in state.invalid, enabled = editable)
                 if (RegistrationField.WHATSAPP_CONSENT in state.invalid) Text(stringResource(Res.string.rg_err_consent), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
@@ -160,7 +174,7 @@ private fun RegistrationFormContent(event: ClubEvent, state: RegistrationFormSta
                 ),
                 Tone.Warning,
             )
-            if (failure.reason == RegistrationRejection.ALREADY_REGISTERED) {
+            if (failure.reason == RegistrationRejection.ALREADY_REGISTERED && ticketRetrievalVisible) {
                 ClubButton(stringResource(Res.string.details_find_ticket), navigateToFindTicket, kind = ButtonKind.Ghost)
             }
         }

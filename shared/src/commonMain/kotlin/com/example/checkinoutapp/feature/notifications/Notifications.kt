@@ -151,7 +151,14 @@ private fun DetailDialog(viewModel: NotificationsViewModel) {
     ) {
         StatusChip(stringResource(job.status.resource()), job.status.tone())
         if (job.isSimulated) Notice(stringResource(Res.string.nt_simulated_note), Tone.Info)
-        LabeledValue(stringResource(Res.string.nt_kind), stringResource(if (job.kind == NotificationKind.TICKET_REPLACEMENT) Res.string.nt_kind_replacement else Res.string.nt_kind_confirmation) + "  ·  " + job.channel.label())
+        LabeledValue(stringResource(Res.string.nt_kind), stringResource(
+            when (job.kind) {
+                NotificationKind.REGISTRATION_RECEIVED -> Res.string.nt_kind_received
+                NotificationKind.REGISTRATION_CONFIRMATION -> Res.string.nt_kind_confirmation
+                NotificationKind.REGISTRATION_APPROVED -> Res.string.nt_kind_approved
+                NotificationKind.TICKET_REPLACEMENT -> Res.string.nt_kind_replacement
+            },
+        ) + "  ·  " + job.channel.label())
         LabeledValue(stringResource(Res.string.nt_col_event), job.eventTitle)
         LabeledValue(stringResource(Res.string.nt_provider), job.provider ?: none)
         LabeledValue(stringResource(Res.string.nt_provider_id), job.providerMessageId ?: none)

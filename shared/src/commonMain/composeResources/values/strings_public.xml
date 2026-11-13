@@ -92,6 +92,9 @@
     <string name="tk_label">Event ticket</string>
     <string name="tk_participant">Participant</string>
     <string name="tk_status_confirmed">Confirmed</string>
+    <string name="tk_status_pending">Pending approval</string>
+    <string name="tk_pending_body">Thank you, %1$s. Your registration is waiting for approval.</string>
+    <string name="tk_pending_note">We sent you an email to confirm we received it. As soon as your registration is approved, you will receive your QR ticket by email.</string>
     <string name="tk_qr_description">Your QR ticket</string>
     <string name="tk_download">Download ticket</string>
     <string name="tk_show_code">Show ticket code</string>
@@ -101,6 +104,8 @@
     <string name="tk_sent_whatsapp">A copy is on its way to your WhatsApp.</string>
     <string name="tk_save_hint">Save this ticket or take a screenshot: you will show the QR code at the entrance.</string>
     <string name="tk_back_to_events">Back to events</string>
+    <string name="rg_delivery_email_only">Your QR ticket will be sent to the email address above.</string>
+    <string name="rg_submitted_title">Registration received</string>
     <string name="tk_downloaded">Ticket saved.</string>
 
     <string name="ft_title">Get your ticket</string>

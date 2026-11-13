@@ -166,7 +166,8 @@ service cloud.firestore {
 
     match /registrations/{registrationId} {
       allow read: if canOperate(resource.data.eventId);
-      // Anyone may apply (PENDING, no seat; the QR works once approved); an administrator may register someone directly.
+      // Anyone may apply (PENDING: no QR, no seat, a "please wait" email); an administrator approves it
+      // (QR issued and emailed) or registers someone directly.
       allow create: if validNewRegistration(registrationId);
       allow update: if canOperate(resource.data.eventId)
         && (attendanceUpdate(registrationId) || (isAdmin() && adminRegistrationUpdate()));
@@ -200,12 +201,11 @@ service cloud.firestore {
         && (r.source == 'ADMIN' ? adminRegistration(registrationId, r, before) : application(r, before));
     }
 
-    // A visitor's application: PENDING, no seat taken, inside the registration window. The visitor
-    // gets their QR at once, but check-in requires REGISTERED, so it only works once approved.
+    // A visitor's application: PENDING, no QR secret and no seat, inside the registration window.
+    // The QR is only issued (and emailed) when an administrator approves.
     function application(r, before) {
       return r.source == 'PUBLIC' && r.registeredBy == null
-        && r.status == 'PENDING' && r.ticketVersion == 1
-        && r.ticketSecret is string && r.ticketSecret.matches('^[a-f0-9]{64}$')
+        && r.status == 'PENDING' && r.ticketVersion == 0 && r.ticketSecret == null
         && request.time >= before.registrationOpenAt && request.time <= before.registrationCloseAt;
     }
 
@@ -311,8 +311,8 @@ service cloud.firestore {
 
     // ── Outbox and audit trail ────────────────────────────────────────────────────────────
 
-    // Messages for the email/WhatsApp sender. A new registration queues its own ticket email in the
-    // same write (to its own address only); everything else (approval, resend) is an administrator's.
+    // Messages for the email/WhatsApp sender. A new application queues its own "please wait" email in
+    // the same write (to its own address only); everything else (approval, resend) is an administrator's.
     // Only the sender (Admin SDK) updates them.
     match /notificationJobs/{jobId} {
       allow read: if isAdmin();
@@ -328,7 +328,8 @@ service cloud.firestore {
           'createdAt', 'updatedAt', 'sentAt', 'deliveredAt'])
         && j.id == jobId
         && j.registrationId is string && j.registrationId.matches('^[A-Za-z0-9]{10,40}$')
-        && jobId.matches('^' + j.registrationId + '_v[0-9]+_(EMAIL|WHATSAPP)_(REGISTRATION_CONFIRMATION|REGISTRATION_APPROVED|TICKET_REPLACEMENT)(_r[0-9]+)?$')
+        && jobId.matches('^' + j.registrationId + '_v[0-9]+_(EMAIL|WHATSAPP)_(REGISTRATION_RECEIVED|REGISTRATION_CONFIRMATION|REGISTRATION_APPROVED|TICKET_REPLACEMENT)(_r[0-9]+)?$')
+        && jobId.matches('.*_' + j.channel + '_' + j.kind + '(_r[0-9]+)?$')
         && j.status == 'PENDING' && j.attemptCount == 0
         && j.provider == null && j.providerMessageId == null && j.lastError == null && j.leaseUntil == null
         && j.sentAt == null && j.deliveredAt == null
@@ -337,8 +338,10 @@ service cloud.firestore {
         && j.ticketVersion == registration.ticketVersion
         && ((j.channel == 'EMAIL' && j.recipient == registration.email)
           || (j.channel == 'WHATSAPP' && j.recipient == registration.phone && registration.whatsappConsent == true))
-        && ((j.kind == 'REGISTRATION_CONFIRMATION' && !exists(registrationPath(j.registrationId)) && registration.status in ['PENDING', 'REGISTERED'])
-          || (isAdmin() && registration.status == 'REGISTERED'));
+        // A visitor's new application: only the "please wait" email (no QR). Anything carrying a QR
+        // needs an approved registration: an administrator's direct registration, approval or resend.
+        && ((j.kind == 'REGISTRATION_RECEIVED' && j.channel == 'EMAIL' && !exists(registrationPath(j.registrationId)) && registration.status == 'PENDING')
+          || (j.kind != 'REGISTRATION_RECEIVED' && isAdmin() && registration.status == 'REGISTERED'));
     }
 
     // Append-only: staff write their own entries, administrators read them, nobody edits them.

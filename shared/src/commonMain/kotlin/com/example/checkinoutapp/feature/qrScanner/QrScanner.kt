@@ -188,6 +188,7 @@ private fun ScanResult.message(): String = stringResource(
         ScanResult.ORGANIZER_NOT_AUTHORIZED -> Res.string.scan_r_not_authorized
         ScanResult.EVENT_MISMATCH -> Res.string.scan_r_mismatch
         ScanResult.TICKET_REVOKED -> Res.string.scan_r_revoked
+        ScanResult.NOT_APPROVED -> Res.string.scan_r_not_approved
         ScanResult.UNKNOWN -> Res.string.scan_r_unknown
     },
 )

@@ -89,17 +89,22 @@ fun EventManagementScreen() {
         }
     }
     EventFormDialog(viewModel)
+
     OrganizersDialog(viewModel)
 
     val columns = listOf(
         TableColumn(stringResource(Res.string.ev_col_event), 1.8f), TableColumn(stringResource(Res.string.ev_col_when), 1.3f),
+
         TableColumn(stringResource(Res.string.ev_col_registered), 0.8f), TableColumn(stringResource(Res.string.ev_col_status), 0.8f),
+
         TableColumn(stringResource(Res.string.ev_col_actions), 2.1f),
     )
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             ClubButton(stringResource(Res.string.ev_new), viewModel::openNew, icon = Icons.Outlined.Add)
         }
+
         events.DisplayResult(
             onLoading = { SkeletonList() },
             onError = { ErrorState(stringResource(Res.string.common_load_failed) + " " + it) },

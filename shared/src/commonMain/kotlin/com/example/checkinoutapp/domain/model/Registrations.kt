@@ -1,7 +1,11 @@
 package com.example.checkinoutapp.domain.model
 
+/**
+ * PENDING: applied, waiting for an administrator (no QR yet). REGISTERED: approved, has a QR.
+ * REJECTED: not accepted. CANCELLED: approved, then cancelled.
+ */
 enum class RegistrationStatus {
-    REGISTERED, WAITLISTED, CANCELLED;
+    PENDING, REGISTERED, REJECTED, WAITLISTED, CANCELLED;
 
     companion object {
         fun fromRaw(raw: String?): RegistrationStatus = entries.firstOrNull { it.name == raw } ?: CANCELLED
@@ -81,4 +85,6 @@ class Ticket(
     val ticketCode: String,
     val emailQueued: Boolean,
     val whatsappQueued: Boolean,
+    /** False right after applying: no QR yet ([ticketCode] is empty); it is emailed once an administrator approves. */
+    val approved: Boolean = true,
 )

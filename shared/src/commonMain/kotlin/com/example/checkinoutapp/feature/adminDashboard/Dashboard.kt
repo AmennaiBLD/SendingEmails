@@ -1,5 +1,6 @@
 package com.example.checkinoutapp.feature.adminDashboard
 
+import com.example.checkinoutapp.navigation.visibleAdminSections
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -89,7 +90,7 @@ fun DashboardScreen(navigateToSection: (AdminSection) -> Unit) {
                             }
                         }
                     } else {
-                        Panel(stringResource(Res.string.dash_upcoming), modifier, action = { ClubButton(stringResource(Res.string.dash_view_all), { navigateToSection(AdminSection.EVENTS) }, kind = ButtonKind.Ghost) }) {
+                        Panel(stringResource(Res.string.dash_upcoming), modifier, action = { if (AdminSection.EVENTS in visibleAdminSections) ClubButton(stringResource(Res.string.dash_view_all), { navigateToSection(AdminSection.EVENTS) }, kind = ButtonKind.Ghost) }) {
                             if (content.upcoming.isEmpty()) MutedText(stringResource(Res.string.dash_upcoming_none))
                             content.upcoming.forEach { event ->
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -107,7 +108,7 @@ fun DashboardScreen(navigateToSection: (AdminSection) -> Unit) {
 
                 CardGrid(listOf(0, 1), if (isCompact) 1 else 2) { index, modifier ->
                     if (index == 0) {
-                        Panel(stringResource(Res.string.dash_recent), modifier, action = { ClubButton(stringResource(Res.string.dash_view_all), { navigateToSection(AdminSection.PARTICIPANTS) }, kind = ButtonKind.Ghost) }) {
+                        Panel(stringResource(Res.string.dash_recent), modifier, action = { if (AdminSection.PARTICIPANTS in visibleAdminSections) ClubButton(stringResource(Res.string.dash_view_all), { navigateToSection(AdminSection.PARTICIPANTS) }, kind = ButtonKind.Ghost) }) {
                             if (content.recent.isEmpty()) MutedText(stringResource(Res.string.dash_recent_none))
                             content.recent.forEach { item ->
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
@@ -117,7 +118,7 @@ fun DashboardScreen(navigateToSection: (AdminSection) -> Unit) {
                             }
                         }
                     } else {
-                        Panel(stringResource(Res.string.dash_failed), modifier, action = { ClubButton(stringResource(Res.string.dash_view_all), { navigateToSection(AdminSection.NOTIFICATIONS) }, kind = ButtonKind.Ghost) }) {
+                        Panel(stringResource(Res.string.dash_failed), modifier, action = { if (AdminSection.NOTIFICATIONS in visibleAdminSections) ClubButton(stringResource(Res.string.dash_view_all), { navigateToSection(AdminSection.NOTIFICATIONS) }, kind = ButtonKind.Ghost) }) {
                             if (content.failedNotifications.isEmpty()) MutedText(stringResource(Res.string.dash_failed_none))
                             content.failedNotifications.forEach { job ->
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {

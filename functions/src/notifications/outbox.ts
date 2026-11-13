@@ -9,7 +9,7 @@ import { EmailProvider, ProviderError, WhatsAppProvider } from "./providers";
 import { EventFacts, registrationApprovedEmail, registrationConfirmationEmail, registrationReceivedEmail, ticketReplacementEmail } from "./templates";
 
 export type Channel = "EMAIL" | "WHATSAPP";
-export type JobKind = "REGISTRATION_CONFIRMATION" | "REGISTRATION_APPROVED" | "TICKET_REPLACEMENT";
+export type JobKind = "REGISTRATION_RECEIVED" | "REGISTRATION_CONFIRMATION" | "REGISTRATION_APPROVED" | "TICKET_REPLACEMENT";
 export type JobStatus = "PENDING" | "PROCESSING" | "SENT" | "DELIVERED" | "FAILED" | "RETRYING";
 
 export interface OutboxDeps {
@@ -72,10 +72,23 @@ export async function processNotificationJob(db: Firestore, jobId: string, deps:
     const event = eventSnap.data();
     if (!reg || !event) throw new ProviderError("The registration or event no longer exists.", false);
     if (reg.status === "CANCELLED") throw new ProviderError("The registration was cancelled.", false);
-    if (reg.ticketVersion !== job.ticketVersion) throw new ProviderError("Superseded by a newer ticket.", false);
 
     const facts = eventFacts(await loadClubName(db), event, reg);
-    if (typeof reg.ticketSecret !== "string") throw new ProviderError("The registration has no ticket secret.", false);
+
+    // "Registration received, please wait for the approval": no QR, no attachments. It is sent even
+    // if the approval came first; that sends its own email with the QR.
+    if (job.kind === "REGISTRATION_RECEIVED") {
+      if (job.channel !== "EMAIL") throw new ProviderError("This message is only sent by email.", false);
+      const { providerMessageId } = await deps.email.send({
+        to: job.recipient, content: registrationReceivedEmail(facts), idempotencyKey: jobId, attachments: [],
+      });
+      return await finish({ status: "SENT", provider: deps.email.name, providerMessageId, lastError: null, sentAt: Timestamp.fromMillis(now()) });
+    }
+
+    if (reg.ticketVersion !== job.ticketVersion) throw new ProviderError("Superseded by a newer ticket.", false);
+    if (reg.status !== "REGISTERED" || typeof reg.ticketSecret !== "string") {
+      throw new ProviderError("The registration is not approved, so it has no QR ticket.", false);
+    }
     const payload = ticketCode(job.registrationId, job.ticketVersion, reg.ticketSecret);
     const assets = await renderTicketAssets(facts, payload);
 
@@ -83,10 +96,8 @@ export async function processNotificationJob(db: Firestore, jobId: string, deps:
     let providerMessageId: string;
     if (job.channel === "EMAIL") {
       providerName = deps.email.name;
-      // The registration email says "pending approval" while it is; approval sends its own email.
       const content = job.kind === "TICKET_REPLACEMENT" ? ticketReplacementEmail(facts)
         : job.kind === "REGISTRATION_APPROVED" ? registrationApprovedEmail(facts)
-        : reg.status === "PENDING" ? registrationReceivedEmail(facts)
         : registrationConfirmationEmail(facts);
       ({ providerMessageId } = await deps.email.send({
         to: job.recipient, content, idempotencyKey: jobId,

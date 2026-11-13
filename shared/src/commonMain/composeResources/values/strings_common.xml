@@ -36,6 +36,8 @@
     <string name="avail_not_published">Not available</string>
 
     <string name="reg_status_registered">Registered</string>
+    <string name="reg_status_pending">Pending</string>
+    <string name="reg_status_rejected">Rejected</string>
     <string name="reg_status_waitlisted">Waitlisted</string>
     <string name="reg_status_cancelled">Cancelled</string>
     <string name="att_none">Not arrived</string>

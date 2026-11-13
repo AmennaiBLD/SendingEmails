@@ -111,6 +111,12 @@
     <string name="pt_cancel">Cancel registration</string>
     <string name="pt_cancel_reason">Reason for cancelling (optional)</string>
     <string name="pt_done_cancel">Registration cancelled.</string>
+    <string name="pt_done_approve">Approved. The QR ticket email is on its way.</string>
+    <string name="pt_done_reject">Registration rejected.</string>
+    <string name="pt_approve">Approve and send the ticket</string>
+    <string name="pt_reject">Reject</string>
+    <string name="pt_review_note">This person registered and is waiting for a decision. They have no QR code yet. Approving issues their QR ticket and emails it to them; rejecting sends nothing.</string>
+    <string name="pt_ticket_pending">Not issued yet (waiting for approval)</string>
     <string name="pt_done_resend">Ticket queued for delivery.</string>
     <string name="pt_done_replace">New ticket issued and queued for delivery.</string>
     <string name="pt_registered">%1$s is registered. Their ticket is queued for delivery.</string>
@@ -197,7 +203,9 @@
     <string name="nt_status_retrying">Retrying</string>
     <string name="nt_channel_email">Email</string>
     <string name="nt_channel_whatsapp">WhatsApp</string>
+    <string name="nt_kind_received">Registration received (waiting for approval)</string>
     <string name="nt_kind_confirmation">Registration confirmation</string>
+    <string name="nt_kind_approved">Approved: QR ticket</string>
     <string name="nt_kind_replacement">Ticket replacement</string>
     <string name="nt_col_recipient">Recipient</string>
     <string name="nt_col_channel">Channel</string>

@@ -25,6 +25,7 @@ import com.example.checkinoutapp.domain.repository.RegistrationOutcome
 import com.example.checkinoutapp.domain.repository.RegistrationRejection
 import com.example.checkinoutapp.domain.repository.RegistrationRepository
 import com.example.checkinoutapp.domain.repository.ResendOutcome
+import com.example.checkinoutapp.domain.repository.ReviewOutcome
 import com.example.checkinoutapp.domain.repository.TicketAccessOutcome
 import com.example.checkinoutapp.feature.attendance.AttendanceViewModel
 import com.example.checkinoutapp.feature.attendance.CorrectionError
@@ -90,6 +91,8 @@ private class FakeRegistrations : RegistrationRepository {
     override fun readRecentRegistrationsFlow(limit: Int): Flow<RequestState<List<Registration>>> = flowOf(RequestState.Success(emptyList()))
     override fun readRegistrationsByEmailFlow(normalizedEmail: String, limit: Int): Flow<RequestState<List<Registration>>> = flowOf(RequestState.Success(emptyList()))
     override suspend fun cancelRegistration(registrationId: String, reason: String) = RequestState.Success(CancelOutcome.CANCELLED)
+    override suspend fun reviewRegistration(registrationId: String, approve: Boolean) =
+        RequestState.Success(if (approve) ReviewOutcome.APPROVED else ReviewOutcome.REJECTED)
     override suspend fun resendTicket(registrationId: String, replace: Boolean) = RequestState.Success(ResendOutcome.QUEUED)
     override suspend fun requestTicketAccess(eventId: String, email: String) = RequestState.Success("request")
     override suspend fun confirmTicketAccess(requestId: String, code: String, replace: Boolean): RequestState<TicketAccessOutcome> = RequestState.Success(TicketAccessOutcome.InvalidCode)

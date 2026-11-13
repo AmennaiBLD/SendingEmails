@@ -58,6 +58,7 @@
     <string name="scan_r_invalid">This is not a valid ticket for the club.</string>
     <string name="scan_r_not_found">No registration matches this ticket.</string>
     <string name="scan_r_cancelled">This registration was cancelled.</string>
+    <string name="scan_r_not_approved">Not approved yet. This person's registration is still waiting for an administrator.</string>
     <string name="scan_r_event_not_open">This event is not open for check-in right now.</string>
     <string name="scan_r_already_in">Already checked in.</string>
     <string name="scan_r_not_in">Not checked in yet. Switch to Check-in first.</string>

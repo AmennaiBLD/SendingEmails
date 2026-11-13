@@ -19,7 +19,13 @@ enum class NotificationStatus {
 }
 
 enum class NotificationKind {
-    REGISTRATION_CONFIRMATION, TICKET_REPLACEMENT;
+    /** "Registration received, wait for the approval": no QR. */
+    REGISTRATION_RECEIVED,
+    /** An administrator registered someone directly: the QR ticket. */
+    REGISTRATION_CONFIRMATION,
+    /** An administrator approved an application: the QR ticket. */
+    REGISTRATION_APPROVED,
+    TICKET_REPLACEMENT;
 
     companion object {
         fun fromRaw(raw: String?): NotificationKind = entries.firstOrNull { it.name == raw } ?: REGISTRATION_CONFIRMATION

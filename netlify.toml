@@ -1,0 +1,11 @@
+# The web app is built locally (./gradlew :webApp:jsBrowserDistribution) and the folder
+# webApp/build/dist/js/productionExecutable is uploaded to Netlify. Netlify does not build it:
+# the build needs JDK 21 and the gitignored firebase/app-config.json.
+[build]
+  publish = "webApp/build/dist/js/productionExecutable"
+  command = "echo 'Built locally, see netlify.toml'"
+
+[[headers]]
+  for = "/*.wasm"
+  [headers.values]
+    Content-Type = "application/wasm"

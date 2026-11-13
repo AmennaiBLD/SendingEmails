@@ -55,14 +55,18 @@ fun RegistrationAvailability.tone(): Tone = when (this) {
 @Composable
 fun RegistrationStatus.label(): String = stringResource(
     when (this) {
+        RegistrationStatus.PENDING -> Res.string.reg_status_pending
         RegistrationStatus.REGISTERED -> Res.string.reg_status_registered
+        RegistrationStatus.REJECTED -> Res.string.reg_status_rejected
         RegistrationStatus.WAITLISTED -> Res.string.reg_status_waitlisted
         RegistrationStatus.CANCELLED -> Res.string.reg_status_cancelled
     },
 )
 
 fun RegistrationStatus.tone(): Tone = when (this) {
+    RegistrationStatus.PENDING -> Tone.Warning
     RegistrationStatus.REGISTERED -> Tone.Success
+    RegistrationStatus.REJECTED -> Tone.Danger
     RegistrationStatus.WAITLISTED -> Tone.Warning
     RegistrationStatus.CANCELLED -> Tone.Danger
 }

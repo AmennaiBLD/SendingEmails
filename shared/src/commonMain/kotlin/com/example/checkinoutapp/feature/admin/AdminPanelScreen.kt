@@ -1,5 +1,6 @@
 package com.example.checkinoutapp.feature.admin
 
+import com.example.checkinoutapp.navigation.visibleAdminSections
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -159,7 +160,7 @@ fun AdminPanelScreen(
                     Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).horizontalScroll(rememberScrollState()).padding(horizontal = Spacing.md, vertical = Spacing.xs),
                     horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
-                    AdminSection.entries.forEach { item ->
+                    visibleAdminSections.forEach { item ->
                         FilterChip(item == section, { section = item }, { Text(stringResource(item.title)) }, leadingIcon = { Icon(item.icon, null, Modifier.size(16.dp)) })
                     }
                 }
@@ -177,7 +178,7 @@ private fun Sidebar(clubName: String, current: AdminSection, onSelect: (AdminSec
             Text(clubName, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 2)
         }
         Spacer(Modifier.height(Spacing.lg))
-        AdminSection.entries.forEach { item ->
+        visibleAdminSections.forEach { item ->
             val active = item == current
             Row(
                 Modifier.fillMaxWidth().padding(vertical = 2.dp).clip(RoundedCornerShape(10.dp))

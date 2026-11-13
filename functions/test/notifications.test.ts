@@ -118,6 +118,41 @@ test("the email QR is built from the secret stored on the registration", async (
   assert.notEqual(newTicketSecret(), newTicketSecret());
 });
 
+test("an application gets a 'please wait' email with no QR; approval sends the QR ticket", async () => {
+  const eventId = await makeEvent();
+  const registrationId = uid("app");
+  const email = `${uid("p")}@example.org`;
+  const regRef = db.collection(C.registrations).doc(registrationId);
+  await regRef.set({ id: registrationId, eventId, participantName: "Ahmed Benali", email, phone: "+213555123456", status: "PENDING", ticketVersion: 0, ticketSecret: null });
+  const queue = async (kind: string, version: number) => {
+    const jobId = `${registrationId}_v${version}_EMAIL_${kind}`;
+    await db.collection(C.notificationJobs).doc(jobId).set({
+      id: jobId, registrationId, eventId, channel: "EMAIL", kind, recipient: email, ticketVersion: version, status: "PENDING", attemptCount: 0,
+    });
+    return jobId;
+  };
+  const sent: { subject: string; attachments: number }[] = [];
+  const capture = {
+    name: "capture",
+    async send(input: { content: { subject: string }; attachments: unknown[] }) {
+      sent.push({ subject: input.content.subject, attachments: input.attachments.length });
+      return { providerMessageId: `c-${sent.length}` };
+    },
+  };
+  const deps = { email: capture, whatsapp: new FakeWhatsApp() };
+
+  // A QR email for a pending registration is refused: it has no ticket yet.
+  assert.equal(await processNotificationJob(db, await queue("REGISTRATION_APPROVED", 0), deps), "FAILED");
+  assert.equal(await processNotificationJob(db, await queue("REGISTRATION_RECEIVED", 0), deps), "SENT");
+  assert.match(sent[0]!.subject, /^Registration received/);
+  assert.equal(sent[0]!.attachments, 0);
+
+  await regRef.update({ status: "REGISTERED", ticketVersion: 1, ticketSecret: newTicketSecret() });
+  assert.equal(await processNotificationJob(db, await queue("REGISTRATION_APPROVED", 1), deps), "SENT");
+  assert.match(sent[1]!.subject, /^You're approved/);
+  assert.equal(sent[1]!.attachments, 3);
+});
+
 test("Gmail failures are sorted: setup problem, try later, or a bad recipient", () => {
   const auth = gmailFailure({ code: "EAUTH", responseCode: 535, message: "Username and Password not accepted" });
   assert.equal(auth.configuration, true, "a wrong App Password keeps the emails queued");

@@ -61,6 +61,7 @@ class AttendanceRepositoryImpl : AttendanceRepository {
                 }
                 val status = registration.get<String?>(field = "status")
                 if (status == RegistrationStatus.CANCELLED.name) return@runTransaction answer(ScanResult.REGISTRATION_CANCELLED)
+                if (status == RegistrationStatus.PENDING.name) return@runTransaction answer(ScanResult.NOT_APPROVED)
                 if (status != RegistrationStatus.REGISTERED.name) return@runTransaction answer(ScanResult.REGISTRATION_NOT_FOUND)
                 if (!event.exists) return@runTransaction answer(ScanResult.EVENT_NOT_OPEN)
 

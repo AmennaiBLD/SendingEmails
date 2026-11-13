@@ -79,26 +79,35 @@ function registration(id: string, eventId: string, email: string, overrides: Rec
   };
 }
 
-/** A visitor's application (RegistrationRepositoryImpl.register, asAdmin = false): PENDING with a QR, no seat. */
-async function apply(db: Db, eventId: string, email: string, reg: Record<string, unknown> = {}, jobOverrides: Record<string, unknown> | null = {}) {
+/** A visitor registering (RegistrationRepositoryImpl.register, asAdmin = false): PENDING, no QR, no seat, "received" email. */
+async function apply(
+  db: Db, eventId: string, email: string, reg: Record<string, unknown> = {}, jobOverrides: Record<string, unknown> | null = {},
+  options: { seat?: boolean } = {},
+) {
   const id = `reg${Math.random().toString(36).slice(2, 12)}`;
-  const batch = writeBatch(db);
-  batch.set(doc(db, `registrations/${id}`), registration(id, eventId, email, { status: "PENDING", ...reg }));
-  batch.set(doc(db, `registrationKeys/${eventId}_${email}`), { registrationId: id, eventId, createdAt: ts() });
-  if (jobOverrides !== null) job(db, batch, id, eventId, email, jobOverrides);
-  await batch.commit();
+  await runTransaction(db, async (tx) => {
+    const count = ((await tx.get(doc(db, `events/${eventId}`))).data()?.registrationCount ?? 0) + 1;
+    const at = ts();
+    tx.set(doc(db, `registrations/${id}`), registration(id, eventId, email, { status: "PENDING", ticketVersion: 0, ticketSecret: null, ...reg }));
+    tx.set(doc(db, `registrationKeys/${eventId}_${email}`), { registrationId: id, eventId, createdAt: at });
+    if (options.seat === true) tx.update(doc(db, `events/${eventId}`), { registrationCount: count, lastRegistrationId: id, updatedAt: at });
+    if (jobOverrides !== null) {
+      job(db, tx, id, eventId, email, { kind: "REGISTRATION_RECEIVED", ticketVersion: 0, ...jobOverrides });
+    }
+  });
   return id;
 }
 
 function job(db: Db, tx: Db, id: string, eventId: string, email: string, overrides: Record<string, unknown> = {}) {
   const at = ts();
-  const jobId = `${id}_v1_EMAIL_REGISTRATION_CONFIRMATION`;
-  tx.set(doc(db, `notificationJobs/${jobId}`), {
-    id: jobId, registrationId: id, eventId, eventTitle: "AI Workshop", participantName: "Ahmed Benali", channel: "EMAIL",
+  const fields = {
+    id: "", registrationId: id, eventId, eventTitle: "AI Workshop", participantName: "Ahmed Benali", channel: "EMAIL",
     kind: "REGISTRATION_CONFIRMATION", recipient: email, ticketVersion: 1, status: "PENDING", provider: null, providerMessageId: null,
     attemptCount: 0, lastError: null, nextAttemptAt: at, leaseUntil: null, createdAt: at, updatedAt: at, sentAt: null, deliveredAt: null,
     ...overrides,
-  });
+  };
+  const jobId = `${id}_v${fields.ticketVersion}_${fields.channel}_${fields.kind}`;
+  tx.set(doc(db, `notificationJobs/${jobId}`), { ...fields, id: jobId });
 }
 
 /** An administrator registering someone directly: approved at once, seat taken, email queued. */
@@ -125,7 +134,7 @@ async function approve(db: Db, uid: string, id: string, eventId: string, email: 
       reviewedAt: at, reviewedBy: uid, updatedAt: at,
     });
     if (options.seat !== false) tx.update(doc(db, `events/${eventId}`), { registrationCount: count + 1, updatedAt: at });
-    job(db, tx, id, eventId, email);
+    job(db, tx, id, eventId, email, { kind: "REGISTRATION_APPROVED" });
   });
 }
 
@@ -154,51 +163,57 @@ const as = (uid: string): Db => env.authenticatedContext(uid).firestore();
 
 // ── Public registration ──────────────────────────────────────────────────────────────────
 
-test("a visitor applies: the registration is PENDING with a QR, and takes no seat", async () => {
+test("a visitor registers: PENDING, no QR, no seat, and a 'received' email", async () => {
   const id = await assertSucceeds(apply(visitor(), "pub", "new@example.org"));
   await env.withSecurityRulesDisabled(async (ctx) => {
     const reg = (await getDoc(doc(ctx.firestore(), `registrations/${id}`))).data()!;
     assert.equal(reg.status, "PENDING");
-    assert.match(reg.ticketSecret, /^[a-f0-9]{64}$/);
-    assert.equal((await getDoc(doc(ctx.firestore(), "events/pub"))).data()!.registrationCount, 0);
+    assert.equal(reg.ticketSecret, null);
+    assert.equal((await getDoc(doc(ctx.firestore(), "events/pub"))).data()!.registrationCount ?? 0, 0);
+    assert.equal((await getDoc(doc(ctx.firestore(), `notificationJobs/${id}_v0_EMAIL_REGISTRATION_RECEIVED`))).data()!.kind, "REGISTRATION_RECEIVED");
   });
 });
 
-test("the same email cannot apply twice; a closed window or a draft event refuses applications", async () => {
+test("the same email cannot register twice; a closed window or a draft refuses", async () => {
   await assertFails(apply(visitor(), "pub", "taken@example.org"));
   await assertFails(apply(visitor(), "closed", "b@example.org"));
   await assertFails(apply(visitor(), "draft", "c@example.org"));
 });
 
-test("a visitor cannot approve themselves: no approved status, no seat, no admin source, a real QR secret", async () => {
-  await assertFails(apply(visitor(), "pub", "d@example.org", { status: "REGISTERED" }));
-  await assertFails(apply(visitor(), "pub", "e@example.org", { ticketSecret: "short" }));
-  await assertFails(apply(visitor(), "pub", "e2@example.org", { ticketVersion: 2 }));
-  await assertFails(apply(visitor(), "pub", "f@example.org", { source: "ADMIN", registeredBy: "admin", status: "REGISTERED", ticketVersion: 1, ticketSecret: SECRET }));
+test("a visitor gets no QR and no seat, and cannot pretend to be approved or an administrator", async () => {
+  await assertFails(apply(visitor(), "pub", "d@example.org", {}, {}, { seat: true }));
+  await assertFails(apply(visitor(), "pub", "d2@example.org", { status: "REGISTERED", ticketVersion: 1, ticketSecret: SECRET }, null));
+  await assertFails(apply(visitor(), "pub", "e@example.org", { ticketSecret: SECRET }));
+  await assertFails(apply(visitor(), "pub", "e2@example.org", { ticketVersion: 1 }, { ticketVersion: 1 }));
+  await assertFails(apply(visitor(), "pub", "f@example.org", { source: "ADMIN", registeredBy: "admin", status: "REGISTERED", ticketVersion: 1, ticketSecret: SECRET }, null, { seat: true }));
   await assertFails(apply(visitor(), "pub", "g@example.org", { attendanceStatus: "COMPLETED", sessionCount: 1 }));
   await assertFails(apply(visitor(), "pub", "h@example.org", { registeredAt: ts(-2 * HOUR), updatedAt: ts(-2 * HOUR) }));
   await assertFails(updateDoc(doc(visitor(), "events/pub"), { registrationCount: 1, lastRegistrationId: "pendingApp001", updatedAt: ts() }));
+  await assertFails(updateDoc(doc(visitor(), "events/pub"), { registrationCount: 5, updatedAt: ts() }));
 });
 
-test("a new registration queues its own ticket email, to its own address only", async () => {
+test("a new application queues only its own 'received' email: no QR email, no other address", async () => {
   await assertSucceeds(apply(visitor(), "pub", "mine@example.org"));
   await assertSucceeds(apply(visitor(), "pub", "noemail@example.org", {}, null));
   await assertFails(apply(visitor(), "pub", "other@example.org", {}, { recipient: "victim@example.org" }));
-  await assertFails(apply(visitor(), "pub", "other2@example.org", {}, { kind: "REGISTRATION_APPROVED" }));
+  await assertFails(apply(visitor(), "pub", "other2@example.org", {}, { kind: "REGISTRATION_CONFIRMATION" }));
+  await assertFails(apply(visitor(), "pub", "other3@example.org", {}, { kind: "REGISTRATION_APPROVED" }));
+  await assertFails(apply(visitor(), "pub", "other4@example.org", { deliveryPreference: "BOTH", whatsappConsent: true }, { channel: "WHATSAPP", recipient: "+213555123456" }));
 });
 
-test("nobody but an administrator queues an email for an existing registration, never a pending one", async () => {
+test("nobody but an administrator queues an email for an existing registration, never a QR for a pending one", async () => {
   const db = visitor();
   const batch = writeBatch(db);
-  job(db, batch, "pendingApp001", "pub", "applicant@example.org");
+  job(db, batch, "pendingApp001", "pub", "applicant@example.org", { kind: "REGISTRATION_RECEIVED", ticketVersion: 0 });
   await assertFails(batch.commit());
   const admin = as("admin");
   const early = writeBatch(admin);
-  job(admin, early, "pendingApp001", "pub", "applicant@example.org");
+  job(admin, early, "pendingApp001", "pub", "applicant@example.org", { kind: "REGISTRATION_APPROVED", ticketVersion: 0 });
   await assertFails(early.commit());
 });
 
-test("an administrator approves: QR secret, one seat and the email in one write", async () => {
+// Approving / rejecting a PENDING registration.
+test("an administrator approves: QR secret, one seat and the QR email in one write", async () => {
   await assertSucceeds(approve(as("admin"), "admin", "pendingApp001", "pub", "applicant@example.org"));
   await env.withSecurityRulesDisabled(async (ctx) => {
     assert.equal((await getDoc(doc(ctx.firestore(), "registrations/pendingApp001"))).data()!.status, "REGISTERED");

@@ -203,33 +203,33 @@ export function registrationConfirmationEmail(f: EventFacts): EmailContent {
   };
 }
 
-/** Sent right after registering, while the registration waits for approval: the same QR as on screen. */
+/** Sent right after registering: the registration waits for approval. No QR: it comes with the approval. */
 export function registrationReceivedEmail(f: EventFacts): EmailContent {
   return {
-    subject: `Registration received: ${f.eventTitle} 🎟️`,
+    subject: `Registration received: ${f.eventTitle}`,
     html: layout(
       f.clubName,
-      `Thanks for registering for ${f.eventTitle}. Here is your QR ticket.`,
-      { kicker: "Registration received", title: f.eventTitle, subtitle: `Hello ${esc(firstName(f.participantName))}, thank you for registering! Here is your personal QR ticket.` },
-      banner("Your registration is being reviewed. This QR code works at the entrance once it is approved, and we will email you as soon as it is.", WARNING, WARNING_BG) +
-        detailsBlock(f) + PERFORATION + qrBlock("Pending approval", true) + stepsBlock() + noteBlock(ATTACHMENTS_NOTE),
+      `We received your registration for ${f.eventTitle}. Please wait for the approval.`,
+      { kicker: "Registration received", title: f.eventTitle, subtitle: `Hello ${esc(firstName(f.participantName))}, thank you for registering!` },
+      banner("Your registration is waiting for approval. As soon as it is approved, we will email you your QR ticket.", WARNING, WARNING_BG) +
+        detailsBlock(f) +
+        noteBlock("There is nothing else to do for now. Keep an eye on your inbox (and your spam folder) for the email with your QR code."),
     ),
-    text: `Hello ${f.participantName},\n\nThank you for registering. Your QR ticket is attached (image and PDF).\nYour registration is being reviewed: the QR code works at the entrance once it is approved, and we will email you then.\n\n${factsText(f)}\n\n${f.clubName}`,
+    text: `Hello ${f.participantName},\n\nThank you for registering. Your registration is waiting for approval.\nAs soon as it is approved, we will email you your QR ticket.\n\n${factsText(f)}\n\n${f.clubName}`,
   };
 }
 
-/** Sent when an administrator approves: the QR the participant already has is now valid. */
+/** Sent when an administrator approves: the QR ticket, valid from now on. */
 export function registrationApprovedEmail(f: EventFacts): EmailContent {
   return {
     subject: `You're approved: ${f.eventTitle} 🎉`,
     html: layout(
       f.clubName,
-      `Your place at ${f.eventTitle} is confirmed. Your QR ticket is valid.`,
-      { kicker: "You're approved", title: f.eventTitle, subtitle: `Great news, ${esc(firstName(f.participantName))}! Your place is confirmed and your QR ticket is now valid.` },
-      detailsBlock(f) + PERFORATION + qrBlock("Confirmed") + stepsBlock() +
-        noteBlock("This is the same QR code you received when you registered. " + ATTACHMENTS_NOTE),
+      `Your place at ${f.eventTitle} is confirmed. Here is your QR ticket.`,
+      { kicker: "You're approved", title: f.eventTitle, subtitle: `Great news, ${esc(firstName(f.participantName))}! Your place is confirmed. Here is your QR ticket.` },
+      detailsBlock(f) + PERFORATION + qrBlock("Confirmed") + stepsBlock() + noteBlock(ATTACHMENTS_NOTE),
     ),
-    text: `Hello ${f.participantName},\n\nYour registration is approved: your QR ticket (attached, the same as before) is now valid.\n\n${factsText(f)}\n\nShow it at the entrance, and again when you leave.\n\n${f.clubName}`,
+    text: `Hello ${f.participantName},\n\nYour registration is approved. Your QR ticket is attached (image and PDF).\n\n${factsText(f)}\n\nShow it at the entrance, and again when you leave.\nKeep it private: anyone holding the QR code can use it.\n\n${f.clubName}`,
   };
 }
 

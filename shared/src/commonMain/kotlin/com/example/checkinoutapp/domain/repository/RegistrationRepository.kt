@@ -22,6 +22,11 @@ interface RegistrationRepository {
         normalizedEmail: String,
         limit: Int
     ): Flow<RequestState<List<Registration>>>
+    /** An administrator accepts (issues the QR and queues the email) or rejects a PENDING registration. */
+    suspend fun reviewRegistration(
+        registrationId: String,
+        approve: Boolean
+    ): RequestState<ReviewOutcome>
     suspend fun cancelRegistration(
         registrationId: String,
         reason: String
@@ -42,12 +47,15 @@ interface RegistrationRepository {
 }
 
 sealed interface RegistrationOutcome {
+    /** A visitor's is `approved = false` with no QR (waiting for approval); an administrator's has the QR ticket. */
     class Registered(val ticket: Ticket) : RegistrationOutcome
     data class Invalid(val fields: Set<RegistrationField>) : RegistrationOutcome
     data class Rejected(val reason: RegistrationRejection) : RegistrationOutcome
 }
 
 enum class RegistrationRejection { EVENT_NOT_FOUND, EVENT_NOT_OPEN, REGISTRATION_NOT_OPEN, REGISTRATION_CLOSED, EVENT_FULL, ALREADY_REGISTERED, UNKNOWN }
+
+enum class ReviewOutcome { APPROVED, REJECTED, NOT_PENDING, EVENT_FULL, REGISTRATION_NOT_FOUND, UNKNOWN }
 
 enum class CancelOutcome { CANCELLED, ALREADY_CANCELLED, REGISTRATION_NOT_FOUND, UNKNOWN }
 

@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.HourglassTop
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.MaterialTheme
@@ -94,7 +95,11 @@ fun TicketCard(ticket: Ticket, clubName: String, modifier: Modifier = Modifier) 
                     Text(stringResource(Res.string.tk_participant).uppercase(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(ticket.participantName, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
                 }
-                StatusChip(stringResource(Res.string.tk_status_confirmed), Tone.Success, icon = Icons.Outlined.CheckCircle)
+                if (ticket.approved) {
+                    StatusChip(stringResource(Res.string.tk_status_confirmed), Tone.Success, icon = Icons.Outlined.CheckCircle)
+                } else {
+                    StatusChip(stringResource(Res.string.tk_status_pending), Tone.Warning, icon = Icons.Outlined.HourglassTop)
+                }
             }
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 IconLine(Icons.Outlined.CalendarMonth, formatDate(ticket.startAt, ticket.timezone))
@@ -134,14 +139,22 @@ fun TicketConfirmation(ticket: Ticket, clubName: String, title: String, navigate
     Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
         Text(title, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
         Text(
-            stringResource(Res.string.tk_confirmed_body, ticket.participantName.substringBefore(' ')),
+            if (ticket.approved) stringResource(Res.string.tk_confirmed_body, ticket.participantName.substringBefore(' '))
+            else stringResource(Res.string.tk_pending_body, ticket.participantName.substringBefore(' ')),
             style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.widthIn(max = 520.dp),
         )
-        TicketCard(ticket, clubName)
-        Column(Modifier.widthIn(max = 460.dp), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-            if (ticket.emailQueued) Notice(stringResource(Res.string.tk_sent_email), Tone.Info)
-            if (ticket.whatsappQueued) Notice(stringResource(Res.string.tk_sent_whatsapp), Tone.Info)
-            if (!ticket.emailQueued && !ticket.whatsappQueued) Notice(stringResource(Res.string.tk_save_hint), Tone.Info)
+        if (ticket.approved) {
+            TicketCard(ticket, clubName)
+            Column(Modifier.widthIn(max = 460.dp), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                if (ticket.emailQueued) Notice(stringResource(Res.string.tk_sent_email), Tone.Info)
+                if (ticket.whatsappQueued) Notice(stringResource(Res.string.tk_sent_whatsapp), Tone.Info)
+                if (!ticket.emailQueued && !ticket.whatsappQueued) Notice(stringResource(Res.string.tk_save_hint), Tone.Info)
+            }
+        } else {
+            // Waiting for approval: no QR yet. It is emailed once an administrator approves.
+            Column(Modifier.widthIn(max = 460.dp), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                Notice(stringResource(Res.string.tk_pending_note), Tone.Warning)
+            }
         }
         ClubButton(stringResource(Res.string.tk_back_to_events), navigateToEvents, kind = ButtonKind.Secondary)
     }

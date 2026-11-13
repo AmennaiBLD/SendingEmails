@@ -48,7 +48,8 @@ export async function requestTicketAccessCore(
   const registrationId: string | null = keySnap.data()?.registrationId ?? null;
   const regSnap = registrationId ? await db.collection(C.registrations).doc(registrationId).get() : null;
   const reg = regSnap?.data();
-  const usable = !!reg && reg.status !== "CANCELLED";
+  // Only an approved registration has a QR ticket to give back.
+  const usable = !!reg && reg.status === "REGISTERED";
 
   const recent = await db.collection(C.ticketAccessRequests).where("keyId", "==", keyId).orderBy("createdAt", "desc").limit(1).get();
   const cooling = recent.docs[0] && nowMs - (recent.docs[0].data().createdAt as Timestamp).toMillis() < RESEND_COOLDOWN_MS;

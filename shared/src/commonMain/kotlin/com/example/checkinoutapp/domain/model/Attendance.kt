@@ -6,7 +6,7 @@ enum class ScanMode { CHECK_IN, CHECK_OUT }
 enum class ScanResult {
     VALID_CHECK_IN, VALID_CHECK_OUT, INVALID_QR, REGISTRATION_NOT_FOUND, REGISTRATION_CANCELLED, EVENT_NOT_OPEN,
     ALREADY_CHECKED_IN, NOT_CHECKED_IN, ALREADY_CHECKED_OUT, ORGANIZER_NOT_AUTHORIZED, EVENT_MISMATCH, TICKET_REVOKED,
-    UNKNOWN;
+    NOT_APPROVED, UNKNOWN;
 
     val isSuccess: Boolean get() = this == VALID_CHECK_IN || this == VALID_CHECK_OUT
     /** Not a success, but nothing is wrong with the ticket: the scan was simply a repeat. */

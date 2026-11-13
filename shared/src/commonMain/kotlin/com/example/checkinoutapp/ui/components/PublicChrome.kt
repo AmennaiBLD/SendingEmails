@@ -1,5 +1,7 @@
 package com.example.checkinoutapp.ui.components
 
+import androidx.compose.material.icons.automirrored.outlined.Login
+import androidx.compose.material3.IconButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -107,7 +109,14 @@ fun PublicScaffold(
                     Spacer(Modifier.weight(1f))
                     NavLink(stringResource(Res.string.nav_home), tab == PublicTab.HOME, navigateToHome)
                     NavLink(stringResource(Res.string.nav_events), tab == PublicTab.EVENTS, navigateToEvents)
-                    if (!isCompact) ClubButton(stringResource(Res.string.nav_staff), navigateToAuth, kind = ButtonKind.Secondary)
+                    if (!isCompact) {
+                        ClubButton(stringResource(Res.string.nav_staff), navigateToAuth, kind = ButtonKind.Secondary)
+                    } else {
+                        // Phones: a sign-in icon, so organizers do not have to scroll to the footer.
+                        IconButton(onClick = navigateToAuth) {
+                            Icon(Icons.AutoMirrored.Outlined.Login, contentDescription = stringResource(Res.string.nav_staff), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
                 }
             }
         }

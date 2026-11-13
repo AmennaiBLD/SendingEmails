@@ -73,6 +73,8 @@ fun ParticipantsScreen() {
             val message = when (event) {
                 is ParticipantEvent.Done -> getString(
                     when (event.action) {
+                        ParticipantAction.APPROVE -> Res.string.pt_done_approve
+                        ParticipantAction.REJECT -> Res.string.pt_done_reject
                         ParticipantAction.CANCEL -> Res.string.pt_done_cancel
                         ParticipantAction.RESEND -> Res.string.pt_done_resend
                         ParticipantAction.REPLACE -> Res.string.pt_done_replace
@@ -108,7 +110,7 @@ private fun ParticipantTable(viewModel: ParticipantsViewModel, event: ClubEvent)
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             SearchField(filter.search, viewModel::setSearch, stringResource(Res.string.pt_search), Modifier.widthIn(min = 240.dp, max = 360.dp))
             FilterChip(filter.status == null, { viewModel.setStatus(null) }, { Text(stringResource(Res.string.common_all)) })
-            listOf(RegistrationStatus.REGISTERED, RegistrationStatus.CANCELLED).forEach { status ->
+            listOf(RegistrationStatus.PENDING, RegistrationStatus.REGISTERED, RegistrationStatus.REJECTED, RegistrationStatus.CANCELLED).forEach { status ->
                 FilterChip(filter.status == status, { viewModel.setStatus(status) }, { Text(status.label()) })
             }
             ClubButton(stringResource(Res.string.pt_register), viewModel::openManual, icon = Icons.Outlined.PersonAdd)
@@ -153,6 +155,7 @@ private fun ParticipantDetailDialog(viewModel: ParticipantsViewModel, event: Clu
     val detail = state ?: return
     val r = detail.registration
     val active = r.status == RegistrationStatus.REGISTERED
+    val pending = r.status == RegistrationStatus.PENDING
     DialogFrame(
         r.participantName, viewModel::closeDetail, subtitle = r.email, wide = true,
         actions = { ClubButton(stringResource(Res.string.common_close), viewModel::closeDetail, kind = ButtonKind.Secondary, enabled = detail.busy == null) },
@@ -170,7 +173,14 @@ private fun ParticipantDetailDialog(viewModel: ParticipantsViewModel, event: Clu
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 LabeledValue(stringResource(Res.string.pt_delivery), r.deliveryPreference.label())
-                LabeledValue(stringResource(Res.string.pt_ticket), if (active) stringResource(Res.string.pt_ticket_version, r.ticketVersion) else stringResource(Res.string.pt_ticket_revoked))
+                LabeledValue(
+                    stringResource(Res.string.pt_ticket),
+                    when {
+                        active -> stringResource(Res.string.pt_ticket_version, r.ticketVersion)
+                        pending -> stringResource(Res.string.pt_ticket_pending)
+                        else -> stringResource(Res.string.pt_ticket_revoked)
+                    },
+                )
                 LabeledValue(stringResource(Res.string.pt_time_attended), if (r.sessionCount == 0) stringResource(Res.string.common_none) else formatDuration(r.totalDurationSeconds))
                 LabeledValue(stringResource(Res.string.pt_col_registered), formatDateTime(r.registeredAt, event.timezone))
             }
@@ -196,6 +206,16 @@ private fun ParticipantDetailDialog(viewModel: ParticipantsViewModel, event: Clu
                     }
                 }
             }
+        }
+        if (pending) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            MutedText(stringResource(Res.string.pt_review_note))
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                ClubButton(stringResource(Res.string.pt_approve), { viewModel.act(ParticipantAction.APPROVE) }, enabled = detail.busy == null, loading = detail.busy == ParticipantAction.APPROVE)
+                ClubButton(stringResource(Res.string.pt_reject), { viewModel.act(ParticipantAction.REJECT) }, kind = ButtonKind.Danger, enabled = detail.busy == null, loading = detail.busy == ParticipantAction.REJECT)
+            }
+            FormField(detail.cancelReason, viewModel::setCancelReason, stringResource(Res.string.pt_cancel_reason), enabled = detail.busy == null)
+            ClubButton(stringResource(Res.string.pt_cancel), { viewModel.act(ParticipantAction.CANCEL) }, kind = ButtonKind.Ghost, enabled = detail.busy == null, loading = detail.busy == ParticipantAction.CANCEL)
         }
         if (active) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

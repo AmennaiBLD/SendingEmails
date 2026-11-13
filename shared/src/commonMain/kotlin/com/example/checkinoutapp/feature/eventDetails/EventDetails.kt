@@ -1,5 +1,6 @@
 package com.example.checkinoutapp.feature.eventDetails
 
+import com.example.checkinoutapp.navigation.ticketRetrievalVisible
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -111,7 +112,9 @@ private fun DetailsContent(content: EventDetailsContent, navigateToRegistration:
                         stringResource(Res.string.details_register), navigateToRegistration, Modifier.fillMaxWidth(),
                         enabled = content.availability.canRegister, large = true,
                     )
-                    ClubButton(stringResource(Res.string.details_find_ticket), navigateToFindTicket, Modifier.fillMaxWidth(), kind = ButtonKind.Ghost)
+                    if (ticketRetrievalVisible) {
+                        ClubButton(stringResource(Res.string.details_find_ticket), navigateToFindTicket, Modifier.fillMaxWidth(), kind = ButtonKind.Ghost)
+                    }
                     Text(stringResource(Res.string.details_timezone_note, event.timezone), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }

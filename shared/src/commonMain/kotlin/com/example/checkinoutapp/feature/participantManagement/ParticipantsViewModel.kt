@@ -16,6 +16,7 @@ import com.example.checkinoutapp.domain.repository.CancelOutcome
 import com.example.checkinoutapp.domain.repository.EventRepository
 import com.example.checkinoutapp.domain.repository.RegistrationOutcome
 import com.example.checkinoutapp.domain.repository.ResendOutcome
+import com.example.checkinoutapp.domain.repository.ReviewOutcome
 import com.example.checkinoutapp.domain.repository.RegistrationRejection
 import com.example.checkinoutapp.domain.repository.RegistrationRepository
 import com.example.checkinoutapp.feature.admin.EventSelection
@@ -41,7 +42,7 @@ data class ParticipantFilter(val search: String = "", val status: RegistrationSt
 
 data class ParticipantList(val shown: List<Registration>, val total: Int)
 
-enum class ParticipantAction { CANCEL, RESEND, REPLACE }
+enum class ParticipantAction { APPROVE, REJECT, CANCEL, RESEND, REPLACE }
 
 /** One participant's panel: their registration, their history across events, and the actions on it. */
 data class ParticipantDetail(
@@ -128,6 +129,17 @@ class ParticipantsViewModel(
             val id = current.registration.id
             // Each action answers with a named outcome; `accepted` says whether that outcome is the one asked for.
             val event = when (action) {
+                ParticipantAction.APPROVE, ParticipantAction.REJECT -> {
+                    val approve = action == ParticipantAction.APPROVE
+                    val result = registrationRepository.reviewRegistration(registrationId = id, approve = approve)
+                    if (result.isSuccess()) {
+                        val outcome = result.getSuccessData()
+                        val wanted = if (approve) ReviewOutcome.APPROVED else ReviewOutcome.REJECTED
+                        if (outcome == wanted) ParticipantEvent.Done(action) else ParticipantEvent.Refused(outcome.name)
+                    } else {
+                        ParticipantEvent.Failed
+                    }
+                }
                 ParticipantAction.CANCEL -> {
                     val result = registrationRepository.cancelRegistration(registrationId = id, reason = current.cancelReason.trim())
                     if (result.isSuccess()) {
