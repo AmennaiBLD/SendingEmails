@@ -145,12 +145,12 @@ test("an application gets a 'please wait' email with no QR; approval sends the Q
   assert.equal(await processNotificationJob(db, await queue("REGISTRATION_APPROVED", 0), deps), "FAILED");
   assert.equal(await processNotificationJob(db, await queue("REGISTRATION_RECEIVED", 0), deps), "SENT");
   assert.match(sent[0]!.subject, /^Registration received/);
-  assert.equal(sent[0]!.attachments, 0);
+  assert.equal(sent[0]!.attachments, 1, "only the inline GDG logo: no QR before approval");
 
   await regRef.update({ status: "REGISTERED", ticketVersion: 1, ticketSecret: newTicketSecret() });
   assert.equal(await processNotificationJob(db, await queue("REGISTRATION_APPROVED", 1), deps), "SENT");
   assert.match(sent[1]!.subject, /^You're approved/);
-  assert.equal(sent[1]!.attachments, 3);
+  assert.equal(sent[1]!.attachments, 4, "QR, ticket image, ticket PDF and the inline logo");
 });
 
 test("Gmail failures are sorted: setup problem, try later, or a bad recipient", () => {

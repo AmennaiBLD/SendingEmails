@@ -6,6 +6,7 @@ import { formatEventDate, formatEventTime } from "../shared/time";
 import { ticketCode } from "../shared/ticketCode";
 import { renderTicketAssets } from "../ticket/ticketAssets";
 import { EmailProvider, ProviderError, WhatsAppProvider } from "./providers";
+import { brandAttachments } from "../shared/brand";
 import { EventFacts, registrationApprovedEmail, registrationConfirmationEmail, registrationReceivedEmail, ticketReplacementEmail } from "./templates";
 
 export type Channel = "EMAIL" | "WHATSAPP";
@@ -34,6 +35,7 @@ export function eventFacts(clubName: string, event: DocumentData, registration: 
     dateText: formatEventDate(start, zone),
     timeText: formatEventTime(start, end, zone),
     location: event.location,
+    siteUrl: process.env.PUBLIC_SITE_URL?.trim() || undefined,
   };
 }
 
@@ -75,12 +77,12 @@ export async function processNotificationJob(db: Firestore, jobId: string, deps:
 
     const facts = eventFacts(await loadClubName(db), event, reg);
 
-    // "Registration received, please wait for the approval": no QR, no attachments. It is sent even
+    // "Registration received, please wait for the approval": no QR (only the inline logo). It is sent even
     // if the approval came first; that sends its own email with the QR.
     if (job.kind === "REGISTRATION_RECEIVED") {
       if (job.channel !== "EMAIL") throw new ProviderError("This message is only sent by email.", false);
       const { providerMessageId } = await deps.email.send({
-        to: job.recipient, content: registrationReceivedEmail(facts), idempotencyKey: jobId, attachments: [],
+        to: job.recipient, content: registrationReceivedEmail(facts), idempotencyKey: jobId, attachments: brandAttachments(),
       });
       return await finish({ status: "SENT", provider: deps.email.name, providerMessageId, lastError: null, sentAt: Timestamp.fromMillis(now()) });
     }
@@ -105,6 +107,7 @@ export async function processNotificationJob(db: Firestore, jobId: string, deps:
           { filename: "qr.png", content: assets.qrPng, contentType: "image/png", contentId: "ticket-qr" },
           { filename: "ticket.png", content: assets.ticketPng, contentType: "image/png" },
           { filename: "ticket.pdf", content: assets.ticketPdf, contentType: "application/pdf" },
+          ...brandAttachments(),
         ],
       }));
     } else {

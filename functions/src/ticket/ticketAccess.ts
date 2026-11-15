@@ -8,6 +8,7 @@ import { isEmail, normalizeEmail, sha256Hex, str } from "../shared/validation";
 import { EmailProvider } from "../notifications/providers";
 import { loadClubName } from "../notifications/outbox";
 import { ticketAccessCodeEmail } from "../notifications/templates";
+import { brandAttachments } from "../shared/brand";
 
 /** The ticket returned to its owner; the app draws the QR from `ticketCode`. */
 export interface TicketView {
@@ -63,7 +64,7 @@ export async function requestTicketAccessCore(
   if (usable && !cooling) {
     try {
       const eventTitle = (await db.collection(C.events).doc(eventId).get()).data()?.title ?? "your event";
-      await email.send({ to: reg!.email, content: ticketAccessCodeEmail(await loadClubName(db), eventTitle, code), attachments: [], idempotencyKey: `access-${requestRef.id}` });
+      await email.send({ to: reg!.email, content: ticketAccessCodeEmail(await loadClubName(db), eventTitle, code), attachments: brandAttachments(), idempotencyKey: `access-${requestRef.id}` });
     } catch (error) {
       logger.warn("Ticket access code email failed", { message: (error as Error).message });
     }
