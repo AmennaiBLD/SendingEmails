@@ -18,8 +18,14 @@ export function formatEventDate(ms: number, zone: string): string {
   }).format(new Date(ms));
 }
 
-/** "09:00 – 12:30 (Africa/Algiers)" in the event's own time zone. */
+/** The club's zone (Africa/Algiers) is shown to people as "Oran"; other zones keep their id. */
+export function zoneLabel(zone: string): string {
+  const id = safeZone(zone);
+  return id === "Africa/Algiers" ? "Oran" : id;
+}
+
+/** "09:00 – 12:30 (Oran)" in the event's own time zone. */
 export function formatEventTime(startMs: number, endMs: number, zone: string): string {
   const format = new Intl.DateTimeFormat("en-GB", { timeZone: safeZone(zone), hour: "2-digit", minute: "2-digit" });
-  return `${format.format(new Date(startMs))} – ${format.format(new Date(endMs))} (${safeZone(zone)})`;
+  return `${format.format(new Date(startMs))} – ${format.format(new Date(endMs))} (${zoneLabel(zone)})`;
 }
