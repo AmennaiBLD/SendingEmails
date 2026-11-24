@@ -7,10 +7,10 @@ import { ticketCode } from "../shared/ticketCode";
 import { renderTicketAssets } from "../ticket/ticketAssets";
 import { EmailProvider, ProviderError, WhatsAppProvider } from "./providers";
 import { brandAttachments } from "../shared/brand";
-import { EventFacts, registrationApprovedEmail, registrationConfirmationEmail, registrationReceivedEmail, ticketReplacementEmail } from "./templates";
+import { EventFacts, registrationApprovedEmail, registrationConfirmationEmail, registrationReceivedEmail, registrationRejectedEmail, ticketReplacementEmail } from "./templates";
 
 export type Channel = "EMAIL" | "WHATSAPP";
-export type JobKind = "REGISTRATION_RECEIVED" | "REGISTRATION_CONFIRMATION" | "REGISTRATION_APPROVED" | "TICKET_REPLACEMENT";
+export type JobKind = "REGISTRATION_RECEIVED" | "REGISTRATION_CONFIRMATION" | "REGISTRATION_APPROVED" | "TICKET_REPLACEMENT" | "REGISTRATION_REJECTED";
 export type JobStatus = "PENDING" | "PROCESSING" | "SENT" | "DELIVERED" | "FAILED" | "RETRYING";
 
 export interface OutboxDeps {
@@ -83,6 +83,17 @@ export async function processNotificationJob(db: Firestore, jobId: string, deps:
       if (job.channel !== "EMAIL") throw new ProviderError("This message is only sent by email.", false);
       const { providerMessageId } = await deps.email.send({
         to: job.recipient, content: registrationReceivedEmail(facts), idempotencyKey: jobId, attachments: brandAttachments(),
+      });
+      return await finish({ status: "SENT", provider: deps.email.name, providerMessageId, lastError: null, sentAt: Timestamp.fromMillis(now()) });
+    }
+
+    // "Not approved": a short answer so nobody keeps waiting. No QR, email only, and only while
+    // the registration is still rejected (an administrator may have changed their mind since).
+    if (job.kind === "REGISTRATION_REJECTED") {
+      if (job.channel !== "EMAIL") throw new ProviderError("This message is only sent by email.", false);
+      if (reg.status !== "REJECTED") throw new ProviderError("The registration is no longer rejected.", false);
+      const { providerMessageId } = await deps.email.send({
+        to: job.recipient, content: registrationRejectedEmail(facts), idempotencyKey: jobId, attachments: brandAttachments(),
       });
       return await finish({ status: "SENT", provider: deps.email.name, providerMessageId, lastError: null, sentAt: Timestamp.fromMillis(now()) });
     }

@@ -243,6 +243,23 @@ export function registrationReceivedEmail(f: EventFacts): EmailContent {
   };
 }
 
+/** Sent when an administrator does not approve an application: a clear, kind answer, no QR. */
+export function registrationRejectedEmail(f: EventFacts): EmailContent {
+  return {
+    subject: `Your registration for ${f.eventTitle}`,
+    html: layout(
+      f.clubName,
+      `About your registration for ${f.eventTitle}.`,
+      { overline: "Registration not approved", title: f.eventTitle, greeting: `Hello ${esc(firstName(f.participantName))}, thank you for your interest in this event.` },
+      banner("We are sorry: your registration could not be approved this time, so there is no ticket for this event. Places are limited and every request was reviewed carefully.") +
+        factsBlock(f) +
+        noteBlock("Please do not come to the entrance for this event. We hope to see you at one of our next events: keep an eye on our website and social media.") +
+        findTicketButton(f),
+    ),
+    text: `Hello ${f.participantName},\n\nThank you for your interest. We are sorry: your registration for ${f.eventTitle} could not be approved this time, so there is no ticket for this event.\n\n${factsText(f)}\n\nWe hope to see you at one of our next events.\n\n${f.clubName}`,
+  };
+}
+
 /** Sent when an administrator approves: the QR ticket, valid from now on. */
 export function registrationApprovedEmail(f: EventFacts): EmailContent {
   return {

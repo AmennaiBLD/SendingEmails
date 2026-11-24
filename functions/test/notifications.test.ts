@@ -153,6 +153,35 @@ test("an application gets a 'please wait' email with no QR; approval sends the Q
   assert.equal(sent[1]!.attachments, 4, "QR, ticket image, ticket PDF and the inline logo");
 });
 
+test("a rejected application gets a short 'not approved' email with no QR", async () => {
+  const eventId = await makeEvent();
+  const registrationId = uid("rej");
+  const email = `${uid("p")}@example.org`;
+  const regRef = db.collection(C.registrations).doc(registrationId);
+  await regRef.set({ id: registrationId, eventId, participantName: "Sara Haddad", email, phone: "", status: "PENDING", ticketVersion: 0, ticketSecret: null });
+  const jobId = `${registrationId}_v0_EMAIL_REGISTRATION_REJECTED`;
+  const queue = () => db.collection(C.notificationJobs).doc(jobId).set({
+    id: jobId, registrationId, eventId, channel: "EMAIL", kind: "REGISTRATION_REJECTED", recipient: email, ticketVersion: 0, status: "PENDING", attemptCount: 0,
+  });
+  const sent: { subject: string; attachments: number }[] = [];
+  const capture = { name: "capture", async send(input: { content: { subject: string }; attachments: unknown[] }) {
+    sent.push({ subject: input.content.subject, attachments: input.attachments.length });
+    return { providerMessageId: `c-${sent.length}` };
+  } };
+  const deps = { email: capture, whatsapp: new FakeWhatsApp() };
+
+  // Still pending (the administrator changed their mind): nothing is sent.
+  await queue();
+  assert.equal(await processNotificationJob(db, jobId, deps), "FAILED");
+  assert.equal(sent.length, 0);
+
+  await regRef.update({ status: "REJECTED" });
+  await queue();
+  assert.equal(await processNotificationJob(db, jobId, deps), "SENT");
+  assert.match(sent[0]!.subject, /^Your registration for/);
+  assert.equal(sent[0]!.attachments, 1, "only the inline GDG logo: no QR");
+});
+
 test("Gmail failures are sorted: setup problem, try later, or a bad recipient", () => {
   const auth = gmailFailure({ code: "EAUTH", responseCode: 535, message: "Username and Password not accepted" });
   assert.equal(auth.configuration, true, "a wrong App Password keeps the emails queued");
