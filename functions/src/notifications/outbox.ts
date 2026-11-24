@@ -7,10 +7,10 @@ import { ticketCode } from "../shared/ticketCode";
 import { renderTicketAssets } from "../ticket/ticketAssets";
 import { EmailProvider, ProviderError, WhatsAppProvider } from "./providers";
 import { brandAttachments } from "../shared/brand";
-import { EventFacts, registrationApprovedEmail, registrationConfirmationEmail, registrationReceivedEmail, registrationRejectedEmail, ticketReplacementEmail } from "./templates";
+import { EventFacts, registrationApprovedEmail, registrationConfirmationEmail, registrationReceivedEmail, registrationCancelledEmail, registrationRejectedEmail, ticketReplacementEmail } from "./templates";
 
 export type Channel = "EMAIL" | "WHATSAPP";
-export type JobKind = "REGISTRATION_RECEIVED" | "REGISTRATION_CONFIRMATION" | "REGISTRATION_APPROVED" | "TICKET_REPLACEMENT" | "REGISTRATION_REJECTED";
+export type JobKind = "REGISTRATION_RECEIVED" | "REGISTRATION_CONFIRMATION" | "REGISTRATION_APPROVED" | "TICKET_REPLACEMENT" | "REGISTRATION_REJECTED" | "REGISTRATION_CANCELLED";
 export type JobStatus = "PENDING" | "PROCESSING" | "SENT" | "DELIVERED" | "FAILED" | "RETRYING";
 
 export interface OutboxDeps {
@@ -73,7 +73,8 @@ export async function processNotificationJob(db: Firestore, jobId: string, deps:
     const reg = regSnap.data();
     const event = eventSnap.data();
     if (!reg || !event) throw new ProviderError("The registration or event no longer exists.", false);
-    if (reg.status === "CANCELLED") throw new ProviderError("The registration was cancelled.", false);
+    // A cancelled registration gets exactly one message: the "registration cancelled" email.
+    if (reg.status === "CANCELLED" && job.kind !== "REGISTRATION_CANCELLED") throw new ProviderError("The registration was cancelled.", false);
 
     const facts = eventFacts(await loadClubName(db), event, reg);
 
@@ -83,6 +84,17 @@ export async function processNotificationJob(db: Firestore, jobId: string, deps:
       if (job.channel !== "EMAIL") throw new ProviderError("This message is only sent by email.", false);
       const { providerMessageId } = await deps.email.send({
         to: job.recipient, content: registrationReceivedEmail(facts), idempotencyKey: jobId, attachments: brandAttachments(),
+      });
+      return await finish({ status: "SENT", provider: deps.email.name, providerMessageId, lastError: null, sentAt: Timestamp.fromMillis(now()) });
+    }
+
+    // "Registration cancelled": the QR no longer works. Email only, with the reason when given.
+    if (job.kind === "REGISTRATION_CANCELLED") {
+      if (job.channel !== "EMAIL") throw new ProviderError("This message is only sent by email.", false);
+      if (reg.status !== "CANCELLED") throw new ProviderError("The registration is no longer cancelled.", false);
+      const note = typeof job.note === "string" ? job.note : "";
+      const { providerMessageId } = await deps.email.send({
+        to: job.recipient, content: registrationCancelledEmail(facts, note), idempotencyKey: jobId, attachments: brandAttachments(),
       });
       return await finish({ status: "SENT", provider: deps.email.name, providerMessageId, lastError: null, sentAt: Timestamp.fromMillis(now()) });
     }

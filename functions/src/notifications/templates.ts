@@ -243,6 +243,25 @@ export function registrationReceivedEmail(f: EventFacts): EmailContent {
   };
 }
 
+/** Sent when an administrator cancels a registration: the QR no longer works. [reason] may be "". */
+export function registrationCancelledEmail(f: EventFacts, reason: string): EmailContent {
+  const why = reason.trim();
+  return {
+    subject: `Registration cancelled: ${f.eventTitle}`,
+    html: layout(
+      f.clubName,
+      `Your registration for ${f.eventTitle} has been cancelled.`,
+      { overline: "Registration cancelled", title: f.eventTitle, greeting: `Hello ${esc(firstName(f.participantName))}, we are writing about your registration.` },
+      banner("Your registration for this event has been cancelled. Any QR ticket you received for it no longer works at the entrance.") +
+        (why ? noteBlock(`<strong style="color:#1a1b21;">Reason:</strong> ${esc(why)}`) : "") +
+        factsBlock(f) +
+        noteBlock("If you think this is a mistake, simply reply to this email. We hope to see you at one of our next events.") +
+        findTicketButton(f),
+    ),
+    text: `Hello ${f.participantName},\n\nYour registration for ${f.eventTitle} has been cancelled. Any QR ticket you received for it no longer works.${why ? `\nReason: ${why}` : ""}\n\n${factsText(f)}\n\nIf you think this is a mistake, reply to this email.\n\n${f.clubName}`,
+  };
+}
+
 /** Sent when an administrator does not approve an application: a clear, kind answer, no QR. */
 export function registrationRejectedEmail(f: EventFacts): EmailContent {
   return {

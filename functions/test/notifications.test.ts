@@ -153,6 +153,36 @@ test("an application gets a 'please wait' email with no QR; approval sends the Q
   assert.equal(sent[1]!.attachments, 4, "QR, ticket image, ticket PDF and the inline logo");
 });
 
+test("a cancelled registration gets one 'registration cancelled' email, with the reason, and nothing else", async () => {
+  const eventId = await makeEvent();
+  const registrationId = uid("can");
+  const email = `${uid("p")}@example.org`;
+  await db.collection(C.registrations).doc(registrationId).set({
+    id: registrationId, eventId, participantName: "Karim Haddad", email, phone: "", status: "CANCELLED", ticketVersion: 1, ticketSecret: newTicketSecret(),
+  });
+  const queue = async (kind: string, extra: Record<string, unknown> = {}) => {
+    const jobId = `${registrationId}_v1_EMAIL_${kind}`;
+    await db.collection(C.notificationJobs).doc(jobId).set({
+      id: jobId, registrationId, eventId, channel: "EMAIL", kind, recipient: email, ticketVersion: 1, status: "PENDING", attemptCount: 0, ...extra,
+    });
+    return jobId;
+  };
+  const sent: { subject: string; html: string; attachments: number }[] = [];
+  const capture = { name: "capture", async send(input: { content: { subject: string; html: string }; attachments: unknown[] }) {
+    sent.push({ subject: input.content.subject, html: input.content.html, attachments: input.attachments.length });
+    return { providerMessageId: `c-${sent.length}` };
+  } };
+  const deps = { email: capture, whatsapp: new FakeWhatsApp() };
+
+  // A QR email for a cancelled registration is still refused.
+  assert.equal(await processNotificationJob(db, await queue("REGISTRATION_APPROVED"), deps), "FAILED");
+  assert.equal(await processNotificationJob(db, await queue("REGISTRATION_CANCELLED", { note: "Duplicate registration" }), deps), "SENT");
+  assert.equal(sent.length, 1);
+  assert.match(sent[0]!.subject, /^Registration cancelled/);
+  assert.match(sent[0]!.html, /Duplicate registration/);
+  assert.equal(sent[0]!.attachments, 1, "only the inline GDG logo: no QR");
+});
+
 test("a rejected application gets a short 'not approved' email with no QR", async () => {
   const eventId = await makeEvent();
   const registrationId = uid("rej");
