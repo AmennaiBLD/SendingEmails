@@ -243,40 +243,39 @@ export function registrationReceivedEmail(f: EventFacts): EmailContent {
   };
 }
 
-/** Sent when an administrator cancels a registration: the QR no longer works. [reason] may be "". */
-export function registrationCancelledEmail(f: EventFacts, reason: string): EmailContent {
-  const why = reason.trim();
+/**
+ * The answer for a registration that will not get a seat (rejected or cancelled): the owner's
+ * wording, no event facts, no QR, no button. Only the overline and subject differ.
+ */
+function noSeatEmail(f: EventFacts, overline: string, subject: string): EmailContent {
+  const first = firstName(f.participantName);
+  const main = "Unfortunately, we reached full capacity and couldn’t confirm a seat for you this time. " +
+    "We received a lot of great applications and genuinely appreciate you taking the time to sign up.";
+  const footer = "Please note that entry is only available to attendees with a confirmed pass, so we can’t accept " +
+    "walk-ins at the door. We’d love to see you next time—stay tuned to our socials for future sessions!";
   return {
-    subject: `Registration cancelled: ${f.eventTitle}`,
+    subject,
     html: layout(
       f.clubName,
-      `Your registration for ${f.eventTitle} has been cancelled.`,
-      { overline: "Registration cancelled", title: f.eventTitle, greeting: `Hello ${esc(firstName(f.participantName))}, we are writing about your registration.` },
-      banner("Your registration for this event has been cancelled. Any QR ticket you received for it no longer works at the entrance.") +
-        (why ? noteBlock(`<strong style="color:#1a1b21;">Reason:</strong> ${esc(why)}`) : "") +
-        factsBlock(f) +
-        noteBlock("If you think this is a mistake, simply reply to this email. We hope to see you at one of our next events.") +
-        findTicketButton(f),
+      `Hi ${first}, thanks for applying to ${f.eventTitle}!`,
+      { overline, title: f.eventTitle, greeting: `Hi ${esc(first)}, thanks for applying to ${esc(f.eventTitle)}!` },
+      banner(esc(main)) + noteBlock(esc(footer)) + `<tr><td style="padding:0 0 36px 0;font-size:0;line-height:0;">&nbsp;</td></tr>`,
     ),
-    text: `Hello ${f.participantName},\n\nYour registration for ${f.eventTitle} has been cancelled. Any QR ticket you received for it no longer works.${why ? `\nReason: ${why}` : ""}\n\n${factsText(f)}\n\nIf you think this is a mistake, reply to this email.\n\n${f.clubName}`,
+    text: `Hi ${first}, thanks for applying to ${f.eventTitle}!\n\n${main}\n\n${footer}\n\n${f.clubName}`,
   };
 }
 
-/** Sent when an administrator does not approve an application: a clear, kind answer, no QR. */
+/**
+ * Sent when an administrator cancels a registration. [reason] (the administrator's note) is kept
+ * in the audit log and the admin views; the email uses the same wording as a rejection.
+ */
+export function registrationCancelledEmail(f: EventFacts, _reason = ""): EmailContent {
+  return noSeatEmail(f, "Registration cancelled", `Registration cancelled: ${f.eventTitle}`);
+}
+
+/** Sent when an administrator does not approve an application. */
 export function registrationRejectedEmail(f: EventFacts): EmailContent {
-  return {
-    subject: `Your registration for ${f.eventTitle}`,
-    html: layout(
-      f.clubName,
-      `About your registration for ${f.eventTitle}.`,
-      { overline: "Registration not approved", title: f.eventTitle, greeting: `Hello ${esc(firstName(f.participantName))}, thank you for your interest in this event.` },
-      banner("We are sorry: your registration could not be approved this time, so there is no ticket for this event. Places are limited and every request was reviewed carefully.") +
-        factsBlock(f) +
-        noteBlock("Please do not come to the entrance for this event. We hope to see you at one of our next events: keep an eye on our website and social media.") +
-        findTicketButton(f),
-    ),
-    text: `Hello ${f.participantName},\n\nThank you for your interest. We are sorry: your registration for ${f.eventTitle} could not be approved this time, so there is no ticket for this event.\n\n${factsText(f)}\n\nWe hope to see you at one of our next events.\n\n${f.clubName}`,
-  };
+  return noSeatEmail(f, "Registration not approved", `Your registration for ${f.eventTitle}`);
 }
 
 /** Sent when an administrator approves: the QR ticket, valid from now on. */
